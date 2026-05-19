@@ -121,6 +121,24 @@ func TestAnalyticsAppliesFilters(t *testing.T) {
 	if resp.Events == nil || len(resp.Events.Items) != 1 || resp.Events.Items[0].EventHash != "filter-a" {
 		t.Fatalf("filtered events = %#v", resp.Events)
 	}
+
+	includeFailed = true
+	resp, err = New(db).Analytics(ctx, Request{
+		FromMS:           fromMS,
+		ToMS:             toMS,
+		SearchQuery:      "raw-api-key",
+		SearchAPIKeyHash: "api-key-auth-2",
+		Filters: Filters{
+			IncludeFailed: &includeFailed,
+		},
+		Include: Include{Summary: true, EventsPage: &EventsPage{Limit: 10}},
+	})
+	if err != nil {
+		t.Fatalf("analytics api key hash search: %v", err)
+	}
+	if resp.Events == nil || len(resp.Events.Items) != 1 || resp.Events.Items[0].EventHash != "filter-c" {
+		t.Fatalf("api key hash search events = %#v", resp.Events)
+	}
 }
 
 func newMonitoringTestStore(t *testing.T) *store.Store {

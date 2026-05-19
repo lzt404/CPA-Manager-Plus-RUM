@@ -12,7 +12,7 @@ import (
 
 const (
 	defaultEventsLimit = 100
-	maxEventsLimit     = 500
+	maxEventsLimit     = 50000
 	recentWindowMS     = 30 * 60 * 1000
 )
 

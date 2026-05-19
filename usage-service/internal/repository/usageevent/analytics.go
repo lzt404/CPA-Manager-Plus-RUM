@@ -516,12 +516,18 @@ func analyticsWhere(filter AnalyticsFilter) (string, []any) {
 	conditions := []string{"timestamp_ms >= ?", "timestamp_ms < ?"}
 	args := []any{filter.FromMS, filter.ToMS}
 
-	if query := strings.TrimSpace(strings.ToLower(filter.SearchQuery)); query != "" {
+	query := strings.TrimSpace(strings.ToLower(filter.SearchQuery))
+	hash := strings.TrimSpace(strings.ToLower(filter.SearchAPIKeyHash))
+	if query != "" {
 		like := "%" + query + "%"
-		conditions = append(conditions, `(lower(coalesce(model, '')) like ? or lower(coalesce(endpoint, '')) like ? or lower(coalesce(source, '')) like ? or lower(coalesce(source_hash, '')) like ? or lower(coalesce(api_key_hash, '')) like ?)`)
-		args = append(args, like, like, like, like, like)
-	}
-	if hash := strings.TrimSpace(strings.ToLower(filter.SearchAPIKeyHash)); hash != "" {
+		if hash != "" {
+			conditions = append(conditions, `(lower(coalesce(model, '')) like ? or lower(coalesce(endpoint, '')) like ? or lower(coalesce(source, '')) like ? or lower(coalesce(source_hash, '')) like ? or lower(coalesce(api_key_hash, '')) like ? or lower(coalesce(api_key_hash, '')) = ?)`)
+			args = append(args, like, like, like, like, like, hash)
+		} else {
+			conditions = append(conditions, `(lower(coalesce(model, '')) like ? or lower(coalesce(endpoint, '')) like ? or lower(coalesce(source, '')) like ? or lower(coalesce(source_hash, '')) like ? or lower(coalesce(api_key_hash, '')) like ?)`)
+			args = append(args, like, like, like, like, like)
+		}
+	} else if hash != "" {
 		conditions = append(conditions, "lower(coalesce(api_key_hash, '')) = ?")
 		args = append(args, hash)
 	}

@@ -53,8 +53,8 @@ func validateRequest(req monitoringsvc.Request) error {
 	if req.FromMS <= 0 || req.ToMS <= 0 || req.FromMS >= req.ToMS {
 		return errors.New("from_ms and to_ms are required and from_ms must be less than to_ms")
 	}
-	if req.Include.EventsPage != nil && req.Include.EventsPage.Limit > 500 {
-		return errors.New("events_page.limit must be less than or equal to 500")
+	if req.Include.EventsPage != nil && req.Include.EventsPage.Limit > 50000 {
+		return errors.New("events_page.limit must be less than or equal to 50000")
 	}
 	return nil
 }
