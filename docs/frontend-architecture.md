@@ -36,3 +36,8 @@
 - `monitoring`: 监控中心、Codex 巡检页面和共享样式已迁入 `src/features/monitoring`。
 - `quota`: 页面和共享样式已迁入 `src/features/quota`。
 - `config`: 配置页面已迁入 `src/features/config`，配置 section 解析已迁入 `src/entities/config`。
+- `login`: 登录页面、登录模式解析和测试已迁入 `src/features/login`。
+- `logs`: 日志页面、日志解析和滚动筛选 hooks 已迁入 `src/features/logs`。
+- `oauth`: OAuth 工具页面已迁入 `src/features/oauth`。
+- `system`: 系统信息页面已迁入 `src/features/system`。
+- `pages`: 已清理未引用的占位页和旧登录样式，当前仅保留路由薄壳。
