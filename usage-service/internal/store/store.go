@@ -106,7 +106,11 @@ func (s *Store) LoadAPIKeyAliases(ctx context.Context) ([]APIKeyAlias, error) {
 }
 
 func (s *Store) UpsertAPIKeyAliases(ctx context.Context, aliases []APIKeyAlias) error {
-	return s.APIKeyAliases.UpsertMany(ctx, aliases)
+	return s.APIKeyAliases.UpsertMany(ctx, aliases, nil, false)
+}
+
+func (s *Store) UpsertAPIKeyAliasesWithActiveHashes(ctx context.Context, aliases []APIKeyAlias, activeHashes []string, allowOrphanCleanup bool) error {
+	return s.APIKeyAliases.UpsertMany(ctx, aliases, activeHashes, allowOrphanCleanup)
 }
 
 func (s *Store) DeleteAPIKeyAlias(ctx context.Context, apiKeyHash string) error {

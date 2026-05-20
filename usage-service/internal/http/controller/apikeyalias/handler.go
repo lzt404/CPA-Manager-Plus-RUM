@@ -36,7 +36,12 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, err)
 			return
 		}
-		aliases, err := h.App.APIKeyAliasService.Save(r.Context(), req.Items)
+		aliases, err := h.App.APIKeyAliasService.Save(
+			r.Context(),
+			req.Items,
+			req.ActiveAPIKeyHashes,
+			req.AllowOrphanAliasCleanup,
+		)
 		if err != nil {
 			response.Error(w, http.StatusBadRequest, err)
 			return

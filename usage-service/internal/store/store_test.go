@@ -142,3 +142,72 @@ func TestStoreAPIKeyAliases(t *testing.T) {
 		t.Fatalf("aliases after delete = %#v", aliases)
 	}
 }
+
+func TestStoreAPIKeyAliasesActiveHashesMigration(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	const orphanHash = "1111111111111111111111111111111111111111111111111111111111111111"
+	const newHash = "2222222222222222222222222222222222222222222222222222222222222222"
+	const activeHash = "3333333333333333333333333333333333333333333333333333333333333333"
+
+	if err := db.UpsertAPIKeyAliases(context.Background(), []APIKeyAlias{
+		{APIKeyHash: orphanHash, Alias: "team-a"},
+		{APIKeyHash: activeHash, Alias: "team-b"},
+	}); err != nil {
+		t.Fatalf("seed aliases: %v", err)
+	}
+
+	if err := db.UpsertAPIKeyAliasesWithActiveHashes(context.Background(), []APIKeyAlias{
+		{APIKeyHash: newHash, Alias: "team-a"},
+	}, []string{newHash, activeHash}, false); err == nil || err.Error() != "api key alias already exists" {
+		t.Fatalf("orphan cleanup without confirmation should be rejected, got err = %v", err)
+	}
+
+	aliases, err := db.LoadAPIKeyAliases(context.Background())
+	if err != nil {
+		t.Fatalf("load aliases after rejected cleanup: %v", err)
+	}
+	hashByAlias := map[string]string{}
+	for _, alias := range aliases {
+		hashByAlias[alias.Alias] = alias.APIKeyHash
+	}
+	if hashByAlias["team-a"] != orphanHash || hashByAlias["team-b"] != activeHash || len(aliases) != 2 {
+		t.Fatalf("rejected cleanup should keep existing aliases, got %#v", aliases)
+	}
+
+	if err := db.UpsertAPIKeyAliasesWithActiveHashes(context.Background(), []APIKeyAlias{
+		{APIKeyHash: newHash, Alias: "team-a"},
+	}, []string{newHash, activeHash}, true); err != nil {
+		t.Fatalf("migrate alias from orphan: %v", err)
+	}
+
+	aliases, err = db.LoadAPIKeyAliases(context.Background())
+	if err != nil {
+		t.Fatalf("load aliases: %v", err)
+	}
+	hashByAlias = map[string]string{}
+	for _, alias := range aliases {
+		hashByAlias[alias.Alias] = alias.APIKeyHash
+	}
+	if hashByAlias["team-a"] != newHash {
+		t.Fatalf("team-a should belong to newHash, got %#v", aliases)
+	}
+	if hashByAlias["team-b"] != activeHash {
+		t.Fatalf("team-b should remain on activeHash, got %#v", aliases)
+	}
+	if len(aliases) != 2 {
+		t.Fatalf("orphan record should be cleaned up, got %#v", aliases)
+	}
+
+	if err := db.UpsertAPIKeyAliasesWithActiveHashes(context.Background(), []APIKeyAlias{
+		{APIKeyHash: newHash, Alias: "team-b"},
+	}, []string{newHash, activeHash}, true); err == nil || err.Error() != "api key alias already exists" {
+		t.Fatalf("active conflict should be rejected, got err = %v", err)
+	}
+}

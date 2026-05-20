@@ -12,7 +12,7 @@ import (
 
 type Repository interface {
 	LoadAll(ctx context.Context) ([]model.APIKeyAlias, error)
-	UpsertMany(ctx context.Context, aliases []model.APIKeyAlias) error
+	UpsertMany(ctx context.Context, aliases []model.APIKeyAlias, activeHashes []string, allowOrphanCleanup bool) error
 	Delete(ctx context.Context, apiKeyHash string) error
 }
 
@@ -44,7 +44,7 @@ func (r *repository) LoadAll(ctx context.Context) ([]model.APIKeyAlias, error) {
 	return aliases, rows.Err()
 }
 
-func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias) error {
+func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias, activeHashes []string, allowOrphanCleanup bool) error {
 	if len(aliases) == 0 {
 		return nil
 	}
@@ -62,6 +62,20 @@ func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias
 		}
 		seenAliases[aliasKey] = normalized.APIKeyHash
 		normalizedAliases = append(normalizedAliases, normalized)
+	}
+
+	var activeSet map[string]struct{}
+	if len(activeHashes) > 0 {
+		activeSet = make(map[string]struct{}, len(activeHashes)+len(normalizedAliases))
+		for _, h := range activeHashes {
+			hash := strings.ToLower(strings.TrimSpace(h))
+			if validAPIKeyHash(hash) {
+				activeSet[hash] = struct{}{}
+			}
+		}
+		for _, normalized := range normalizedAliases {
+			activeSet[normalized.APIKeyHash] = struct{}{}
+		}
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -82,6 +96,12 @@ func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias
 		return err
 	}
 	defer stmt.Close()
+
+	deleteStmt, err := tx.PrepareContext(ctx, `delete from api_key_aliases where api_key_hash = ?`)
+	if err != nil {
+		return err
+	}
+	defer deleteStmt.Close()
 
 	existingRows, err := tx.QueryContext(ctx, `select api_key_hash, alias from api_key_aliases`)
 	if err != nil {
@@ -107,7 +127,19 @@ func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias
 	for _, normalized := range normalizedAliases {
 		aliasKey := normalizeAPIKeyAliasUniqueKey(normalized.Alias)
 		if existingHash, ok := existingAliases[aliasKey]; ok && existingHash != normalized.APIKeyHash {
-			return errors.New("api key alias already exists")
+			if activeSet == nil {
+				return errors.New("api key alias already exists")
+			}
+			if _, isActive := activeSet[existingHash]; isActive {
+				return errors.New("api key alias already exists")
+			}
+			if !allowOrphanCleanup {
+				return errors.New("api key alias already exists")
+			}
+			if _, err := deleteStmt.ExecContext(ctx, existingHash); err != nil {
+				return err
+			}
+			delete(existingAliases, aliasKey)
 		}
 		if _, err := stmt.ExecContext(
 			ctx,
@@ -117,6 +149,7 @@ func (r *repository) UpsertMany(ctx context.Context, aliases []model.APIKeyAlias
 		); err != nil {
 			return err
 		}
+		existingAliases[aliasKey] = normalized.APIKeyHash
 	}
 	return tx.Commit()
 }

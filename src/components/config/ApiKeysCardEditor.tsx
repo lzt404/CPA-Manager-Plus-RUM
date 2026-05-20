@@ -17,6 +17,11 @@ import { isValidApiKeyCharset } from '@/utils/validation';
 import { makeClientId } from '@/types/visualConfig';
 import styles from './VisualConfigEditor.module.scss';
 
+type OrphanAliasConflict = {
+  apiKeyHash: string;
+  alias: string;
+};
+
 export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   value,
   disabled,
@@ -160,21 +165,108 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     return hash ? (aliasByHash.get(hash)?.alias ?? '') : '';
   };
 
+  const collectActiveApiKeyHashes = (keys: string[]) =>
+    Array.from(
+      new Set(
+        keys
+          .map((key) => getApiKeyHash(key))
+          .map((hash) => hash.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+
   const normalizeAliasKey = (alias: string) => alias.trim().toLowerCase();
 
-  const isDuplicateAlias = (alias: string, currentApiKeyHash: string) => {
+  const isDuplicateAlias = (
+    alias: string,
+    currentApiKeyHash: string,
+    activeApiKeyHashes?: string[]
+  ) => {
     const aliasKey = normalizeAliasKey(alias);
     const currentHash = currentApiKeyHash.trim().toLowerCase();
+    const activeHashSet =
+      activeApiKeyHashes && activeApiKeyHashes.length > 0
+        ? new Set(activeApiKeyHashes.map((hash) => hash.trim().toLowerCase()).filter(Boolean))
+        : null;
     if (!aliasKey) return false;
     return apiKeyAliases.some((item) => {
       const itemHash = String(item.apiKeyHash || '')
         .trim()
         .toLowerCase();
+      if (activeHashSet && !activeHashSet.has(itemHash)) return false;
       return itemHash !== currentHash && normalizeAliasKey(String(item.alias || '')) === aliasKey;
     });
   };
 
-  const validateAlias = (alias: string, currentApiKeyHash: string = '') => {
+  const findOrphanAliasConflict = (
+    alias: string,
+    currentApiKeyHash: string,
+    activeApiKeyHashes?: string[]
+  ): OrphanAliasConflict | null => {
+    const aliasKey = normalizeAliasKey(alias);
+    const currentHash = currentApiKeyHash.trim().toLowerCase();
+    if (!aliasKey || !activeApiKeyHashes || activeApiKeyHashes.length === 0) return null;
+
+    const activeHashSet = new Set(
+      activeApiKeyHashes.map((hash) => hash.trim().toLowerCase()).filter(Boolean)
+    );
+
+    for (const item of apiKeyAliases) {
+      const itemHash = String(item.apiKeyHash || '')
+        .trim()
+        .toLowerCase();
+      const itemAlias = String(item.alias || '').trim();
+      if (!itemHash || itemHash === currentHash || activeHashSet.has(itemHash)) continue;
+      if (normalizeAliasKey(itemAlias) === aliasKey) {
+        return { apiKeyHash: itemHash, alias: itemAlias };
+      }
+    }
+
+    return null;
+  };
+
+  const requestOrphanAliasCleanup = async (
+    alias: string,
+    currentApiKeyHash: string,
+    activeApiKeyHashes?: string[]
+  ): Promise<{ shouldContinue: boolean; allowOrphanAliasCleanup: boolean }> => {
+    const conflict = findOrphanAliasConflict(alias, currentApiKeyHash, activeApiKeyHashes);
+    if (!conflict) {
+      return { shouldContinue: true, allowOrphanAliasCleanup: false };
+    }
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      showConfirmation({
+        title: t('config_management.visual.api_keys.alias_cleanup_title'),
+        message: (
+          <>
+            <p style={{ margin: '0 0 0.75rem' }}>
+              {t('config_management.visual.api_keys.alias_cleanup_confirm', {
+                alias: conflict.alias,
+              })}
+            </p>
+            <p style={{ margin: 0 }}>
+              {t('config_management.visual.api_keys.alias_cleanup_risk', {
+                hash: conflict.apiKeyHash.slice(0, 12),
+              })}
+            </p>
+          </>
+        ),
+        confirmText: t('config_management.visual.api_keys.alias_cleanup_confirm_action'),
+        variant: 'danger',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+
+    return { shouldContinue: confirmed, allowOrphanAliasCleanup: confirmed };
+  };
+
+  const validateAlias = (
+    alias: string,
+    currentApiKeyHash: string = '',
+    activeApiKeyHashes?: string[]
+  ) => {
     const trimmed = alias.trim();
     if (!trimmed) {
       return t('config_management.visual.api_keys.alias_error_empty');
@@ -182,19 +274,24 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     if (Array.from(trimmed).length > 120) {
       return t('config_management.visual.api_keys.alias_error_too_long');
     }
-    if (isDuplicateAlias(trimmed, currentApiKeyHash)) {
+    if (isDuplicateAlias(trimmed, currentApiKeyHash, activeApiKeyHashes)) {
       return t('config_management.visual.api_keys.alias_error_duplicate');
     }
     return '';
   };
 
-  const saveAliasForKey = async (apiKey: string, alias: string) => {
+  const saveAliasForKey = async (
+    apiKey: string,
+    alias: string,
+    activeApiKeyHashes?: string[],
+    allowOrphanAliasCleanup = false
+  ) => {
     const apiKeyHash = getApiKeyHash(apiKey);
     const trimmedAlias = alias.trim();
     if (!apiKeyHash) {
       throw new Error(t('config_management.visual.api_keys.error_empty'));
     }
-    const validationError = validateAlias(trimmedAlias, apiKeyHash);
+    const validationError = validateAlias(trimmedAlias, apiKeyHash, activeApiKeyHashes);
     if (validationError) {
       throw new Error(validationError);
     }
@@ -207,7 +304,9 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     const response = await usageServiceApi.saveApiKeyAliases(
       serviceBase,
       [{ apiKeyHash, alias: trimmedAlias }],
-      managementKey
+      managementKey,
+      activeApiKeyHashes,
+      allowOrphanAliasCleanup
     );
     setAliasesAvailable(true);
     setApiKeyAliases(Array.isArray(response.items) ? response.items : []);
@@ -300,8 +399,17 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       setFormError(t('config_management.visual.api_keys.error_invalid'));
       return;
     }
+    const editingIndex = editingApiKeyId
+      ? renderApiKeyIds.findIndex((id) => id === editingApiKeyId)
+      : -1;
+    const nextKeys =
+      editingApiKeyId === null
+        ? [...apiKeys, trimmed]
+        : apiKeys.map((key, idx) => (idx === editingIndex ? trimmed : key));
+    const activeApiKeyHashes = collectActiveApiKeyHashes(nextKeys);
+
     if (trimmedAlias) {
-      const aliasError = validateAlias(trimmedAlias, getApiKeyHash(trimmed));
+      const aliasError = validateAlias(trimmedAlias, getApiKeyHash(trimmed), activeApiKeyHashes);
       if (aliasError) {
         setFormError(aliasError);
         return;
@@ -312,18 +420,24 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       }
     }
 
-    const editingIndex = editingApiKeyId
-      ? renderApiKeyIds.findIndex((id) => id === editingApiKeyId)
-      : -1;
-    const nextKeys =
-      editingApiKeyId === null
-        ? [...apiKeys, trimmed]
-        : apiKeys.map((key, idx) => (idx === editingIndex ? trimmed : key));
-
     if (trimmedAlias) {
+      const cleanupDecision = await requestOrphanAliasCleanup(
+        trimmedAlias,
+        getApiKeyHash(trimmed),
+        activeApiKeyHashes
+      );
+      if (!cleanupDecision.shouldContinue) {
+        setFormError(t('config_management.visual.api_keys.alias_cleanup_cancelled'));
+        return;
+      }
       try {
         setAliasSaving(true);
-        await saveAliasForKey(trimmed, trimmedAlias);
+        await saveAliasForKey(
+          trimmed,
+          trimmedAlias,
+          activeApiKeyHashes,
+          cleanupDecision.allowOrphanAliasCleanup
+        );
         showNotification(t('config_management.visual.api_keys.alias_saved'), 'success');
       } catch (error) {
         setFormError(getAliasErrorMessage(error));
@@ -345,15 +459,31 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       ? renderApiKeyIds.findIndex((id) => id === aliasEditingApiKeyId)
       : -1;
     const editingKey = apiKeys[editingIndex] ?? '';
-    const aliasError = validateAlias(aliasInputValue, getApiKeyHash(editingKey));
+    const activeApiKeyHashes = collectActiveApiKeyHashes(apiKeys);
+    const aliasError = validateAlias(aliasInputValue, getApiKeyHash(editingKey), activeApiKeyHashes);
     if (aliasError) {
       setAliasFormError(aliasError);
       return;
     }
 
+    const cleanupDecision = await requestOrphanAliasCleanup(
+      aliasInputValue,
+      getApiKeyHash(editingKey),
+      activeApiKeyHashes
+    );
+    if (!cleanupDecision.shouldContinue) {
+      setAliasFormError(t('config_management.visual.api_keys.alias_cleanup_cancelled'));
+      return;
+    }
+
     setAliasSaving(true);
     try {
-      await saveAliasForKey(editingKey, aliasInputValue);
+      await saveAliasForKey(
+        editingKey,
+        aliasInputValue,
+        activeApiKeyHashes,
+        cleanupDecision.allowOrphanAliasCleanup
+      );
       showNotification(t('config_management.visual.api_keys.alias_saved'), 'success');
       closeAliasModal();
     } catch (error) {
