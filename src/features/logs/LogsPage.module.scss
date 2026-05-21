@@ -16,13 +16,13 @@
 .tabBar {
   display: flex;
   gap: $spacing-xs;
-  margin-bottom: $spacing-lg;
+  margin-bottom: $spacing-md;
   border-bottom: 1px solid var(--border-color);
 }
 
 .tabItem {
   @include button-reset;
-  padding: 12px 20px;
+  padding: 10px 16px;
   font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -53,7 +53,7 @@
 .content {
   display: flex;
   flex-direction: column;
-  gap: $spacing-lg;
+  gap: $spacing-md;
   flex: 1;
   min-height: 0;
 
@@ -80,7 +80,7 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: $spacing-sm;
+  gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
 
@@ -94,9 +94,9 @@
 .filters {
   display: flex;
   align-items: center;
-  gap: $spacing-md;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: $spacing-md;
+  margin-bottom: 10px;
 
   :global(.form-group) {
     margin: 0;
@@ -111,17 +111,25 @@
 .searchWrapper {
   flex: 1;
   min-width: 220px;
-  max-width: 420px;
+  max-width: 380px;
 }
 
 .filterPanelHeader {
   display: flex;
   align-items: center;
-  flex: 1 1 100%;
+  flex: 0 0 auto;
 }
 
 .filterPanelToggle {
   white-space: nowrap;
+}
+
+.filterPanelToggle:global(.btn.btn-sm),
+.actionButton:global(.btn.btn-sm) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
 }
 
 .filterPanelButtonContent {
@@ -134,7 +142,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: $radius-full;
+  border-radius: 11px;
   background: rgba($primary-color, 0.12);
   color: var(--primary-color);
   font-size: 12px;
@@ -144,9 +152,9 @@
 .structuredFilters {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   flex: 1 1 100%;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: var(--surface-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: $radius-md;
@@ -155,7 +163,7 @@
 .filterChipGroup {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -163,14 +171,14 @@
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 700;
-  line-height: 28px;
+  line-height: 26px;
   min-width: 68px;
 }
 
 .filterChipList {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   flex: 1;
 }
@@ -180,15 +188,15 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: $radius-full;
+  padding: 3px 8px;
+  border-radius: 12px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.3;
   cursor: pointer;
-  max-width: 280px;
+  max-width: 240px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -246,7 +254,12 @@
 }
 
 .searchInput {
+  height: 36px;
+  min-height: 36px;
+  padding-top: 0 !important;
   padding-right: 44px !important;
+  padding-bottom: 0 !important;
+  border-radius: 12px !important;
 }
 
 .searchIcon {
@@ -261,7 +274,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: $radius-full;
+  border-radius: 12px;
   color: var(--text-secondary);
 
   &:hover {
@@ -630,7 +643,7 @@
       flex: 0 0 auto;
       gap: $spacing-sm;
       margin-bottom: $spacing-sm;
-      max-height: 260px;
+      max-height: 220px;
       overflow: auto;
       padding-right: 4px;
       overscroll-behavior: contain;
@@ -677,7 +690,7 @@
 
   @media (min-width: 769px) {
     .filters {
-      max-height: 180px;
+      max-height: 160px;
     }
 
     .logPanel {

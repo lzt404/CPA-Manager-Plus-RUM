@@ -469,7 +469,7 @@ export function AiProvidersOpenAIEditPage() {
                 <div className={styles.keyTableColAction}>
                   <Button
                     variant="secondary"
-                    size="sm"
+                    size="xs"
                     onClick={() => void testSingleKey(index)}
                     disabled={saving || disableControls || isTestingKeys || !canTestKey}
                     loading={keyStatus === 'loading'}
@@ -478,7 +478,7 @@ export function AiProvidersOpenAIEditPage() {
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="xs"
                     onClick={() => removeEntry(index)}
                     disabled={saving || disableControls || isTestingKeys || list.length <= 1}
                   >
