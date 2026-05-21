@@ -418,7 +418,8 @@ export function VersionCard({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
+                  size="xs"
+                  iconOnly
                   className={styles.versionAction}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -447,7 +448,8 @@ export function VersionCard({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
+                  size="xs"
+                  iconOnly
                   className={styles.versionAction}
                   onClick={() => void handleApiVersionCheck()}
                   loading={checkingApiVersion}

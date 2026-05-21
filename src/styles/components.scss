@@ -14,9 +14,13 @@ button:disabled {
   justify-content: center;
   gap: $spacing-sm;
   border: 1px solid transparent;
-  border-radius: var(--app-radius-sm);
-  padding: 10px 14px;
+  border-radius: var(--app-radius-md);
+  height: 40px;
+  padding: 0 14px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
   transition: all $transition-fast;
   background-color: var(--app-surface-muted);
@@ -112,15 +116,56 @@ button:disabled {
     width: 100%;
   }
 
-  &.btn-sm {
-    padding: 8px 10px;
-    font-size: 14px;
+  &:where(.btn-sm) {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: var(--app-radius-md);
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  &:where(.btn-xs) {
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  &:where(.btn-icon-only) {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    gap: 0;
+  }
+
+  &:where(.btn-sm):where(.btn-icon-only) {
+    width: 34px;
+    min-width: 34px;
+  }
+
+  &:where(.btn-xs):where(.btn-icon-only) {
+    width: 30px;
+    min-width: 30px;
   }
 
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
     box-shadow: none;
+  }
+
+  > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: inherit;
+    min-width: 0;
+    line-height: inherit;
+  }
+
+  svg {
+    flex-shrink: 0;
   }
 }
 

@@ -561,7 +561,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
                 <div className="item-actions">
                   <Button
                     variant="secondary"
-                    size="sm"
+                    size="xs"
                     onClick={() => openAliasModal(renderApiKeyIds[index] ?? '')}
                     disabled={disabled || aliasesLoading || !aliasesAvailable}
                   >
@@ -569,7 +569,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
                   </Button>
                   <Button
                     variant="secondary"
-                    size="sm"
+                    size="xs"
                     onClick={() => handleCopy(key)}
                     disabled={disabled}
                   >
@@ -577,7 +577,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
                   </Button>
                   <Button
                     variant="secondary"
-                    size="sm"
+                    size="xs"
                     onClick={() => openEditModal(renderApiKeyIds[index] ?? '')}
                     disabled={disabled}
                   >
@@ -585,7 +585,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
                   </Button>
                   <Button
                     variant="danger"
-                    size="sm"
+                    size="xs"
                     onClick={() => handleDelete(renderApiKeyIds[index] ?? '')}
                     disabled={disabled}
                   >

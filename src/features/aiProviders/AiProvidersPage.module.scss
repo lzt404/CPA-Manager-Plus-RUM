@@ -106,7 +106,7 @@ $openai-toolbar-control-height: 36px;
     height: $openai-toolbar-control-height;
     padding: 0 12px;
     border-color: var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 12px;
     background: var(--surface-subtle);
     box-shadow: none;
     font-size: 13px;
@@ -120,7 +120,7 @@ $openai-toolbar-control-height: 36px;
   height: $openai-toolbar-control-height;
   padding: 0 10px;
   border-color: var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 12px;
   background: var(--surface-subtle);
   color: var(--text-primary);
   gap: 6px;
@@ -194,7 +194,7 @@ $openai-toolbar-control-height: 36px;
   width: 164px;
   height: $openai-toolbar-control-height;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 12px;
   background: var(--surface-subtle);
   overflow: hidden;
   transition:
@@ -359,6 +359,7 @@ $openai-toolbar-control-height: 36px;
 .openaiAddButton:global(.btn.btn-primary) {
   height: $openai-toolbar-control-height;
   padding: 0 12px;
+  border-radius: 12px;
 }
 
 .modelDropdownItems {
@@ -417,7 +418,7 @@ $openai-toolbar-control-height: 36px;
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.1;

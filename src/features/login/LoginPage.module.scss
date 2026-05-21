@@ -170,6 +170,12 @@
   }
 }
 
+.setupCard :global(.btn:not(.btn-sm):not(.btn-xs)) {
+  height: 48px;
+  min-height: 48px;
+  font-size: 16px;
+}
+
 .setupHeader {
   position: relative;
   display: flex;

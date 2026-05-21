@@ -211,13 +211,13 @@ const StringListEditor = memo(function StringListEditor({
             onChange={(nextValue) => updateItem(index, nextValue)}
             disabled={disabled}
           />
-          <Button variant="ghost" size="sm" onClick={() => removeItem(index)} disabled={disabled}>
+          <Button variant="ghost" size="xs" onClick={() => removeItem(index)} disabled={disabled}>
             {t('config_management.visual.common.delete')}
           </Button>
         </div>
       ))}
       <div className={styles.actionRow}>
-        <Button variant="secondary" size="sm" onClick={addItem} disabled={disabled}>
+        <Button variant="secondary" size="xs" onClick={addItem} disabled={disabled}>
           {t('config_management.visual.common.add')}
         </Button>
       </div>
@@ -260,13 +260,13 @@ const PayloadHeadersEditor = memo(function PayloadHeadersEditor({
             onChange={(nextValue) => updateHeader(index, { value: nextValue })}
             disabled={disabled}
           />
-          <Button variant="ghost" size="sm" onClick={() => removeHeader(index)} disabled={disabled}>
+          <Button variant="ghost" size="xs" onClick={() => removeHeader(index)} disabled={disabled}>
             {t('config_management.visual.common.delete')}
           </Button>
         </div>
       ))}
       <div className={styles.actionRow}>
-        <Button variant="secondary" size="sm" onClick={addHeader} disabled={disabled}>
+        <Button variant="secondary" size="xs" onClick={addHeader} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_header')}
         </Button>
       </div>
@@ -405,7 +405,7 @@ const PayloadConditionsEditor = memo(function PayloadConditionsEditor({
               {renderValueEditor(condition, index)}
               <Button
                 variant="ghost"
-                size="sm"
+                size="xs"
                 className={styles.payloadRowActionButton}
                 onClick={() => removeCondition(index)}
                 disabled={disabled}
@@ -420,7 +420,7 @@ const PayloadConditionsEditor = memo(function PayloadConditionsEditor({
         );
       })}
       <div className={styles.actionRow}>
-        <Button variant="secondary" size="sm" onClick={addCondition} disabled={disabled}>
+        <Button variant="secondary" size="xs" onClick={addCondition} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_condition')}
         </Button>
       </div>
@@ -649,7 +649,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
             </div>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               onClick={() => removeRule(ruleIndex)}
               disabled={disabled}
             >
@@ -726,7 +726,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
                     )}
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="xs"
                       className={styles.payloadRowActionButton}
                       onClick={() => toggleModelAdvanced(model)}
                       disabled={disabled}
@@ -737,7 +737,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="xs"
                       className={styles.payloadRowActionButton}
                       onClick={() => removeModel(ruleIndex, modelIndex)}
                       disabled={disabled}
@@ -829,7 +829,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
             <div className={styles.actionRow}>
               <Button
                 variant="secondary"
-                size="sm"
+                size="xs"
                 onClick={() => addModel(ruleIndex)}
                 disabled={disabled}
               >
@@ -879,7 +879,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
                     {renderParamValueEditor(ruleIndex, paramIndex, param)}
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="xs"
                       className={styles.payloadRowActionButton}
                       onClick={() => removeParam(ruleIndex, paramIndex)}
                       disabled={disabled}
@@ -896,7 +896,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
             <div className={styles.actionRow}>
               <Button
                 variant="secondary"
-                size="sm"
+                size="xs"
                 onClick={() => addParam(ruleIndex)}
                 disabled={disabled}
               >
@@ -914,7 +914,7 @@ export const PayloadRulesEditor = memo(function PayloadRulesEditor({
       )}
 
       <div className={styles.actionRow}>
-        <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
+        <Button variant="secondary" size="xs" onClick={addRule} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_rule')}
         </Button>
       </div>
@@ -973,7 +973,7 @@ export const PayloadFilterRulesEditor = memo(function PayloadFilterRulesEditor({
             </div>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               onClick={() => removeRule(ruleIndex)}
               disabled={disabled}
             >
@@ -1007,7 +1007,7 @@ export const PayloadFilterRulesEditor = memo(function PayloadFilterRulesEditor({
                 />
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="xs"
                   className={styles.payloadRowActionButton}
                   onClick={() => removeModel(ruleIndex, modelIndex)}
                   disabled={disabled}
@@ -1019,7 +1019,7 @@ export const PayloadFilterRulesEditor = memo(function PayloadFilterRulesEditor({
             <div className={styles.actionRow}>
               <Button
                 variant="secondary"
-                size="sm"
+                size="xs"
                 onClick={() => addModel(ruleIndex)}
                 disabled={disabled}
               >
@@ -1050,7 +1050,7 @@ export const PayloadFilterRulesEditor = memo(function PayloadFilterRulesEditor({
       )}
 
       <div className={styles.actionRow}>
-        <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
+        <Button variant="secondary" size="xs" onClick={addRule} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_rule')}
         </Button>
       </div>

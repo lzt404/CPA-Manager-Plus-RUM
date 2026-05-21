@@ -8,7 +8,7 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: $spacing-lg;
+  gap: $spacing-md;
   box-sizing: border-box;
   overflow-y: auto;
   padding-bottom: calc(
@@ -21,9 +21,9 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
 
   @include mobile {
@@ -35,9 +35,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
   background: color-mix(in srgb, var(--bg-primary) 86%, transparent);
   color: var(--text-primary);
@@ -54,8 +54,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
-  border-radius: 999px;
+  padding: 3px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
   width: fit-content;
@@ -74,11 +74,12 @@
 
 .tabItem {
   @include button-reset;
-  padding: 10px 16px;
-  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 12px;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   transition:
@@ -179,9 +180,9 @@
 .managerSection {
   display: flex;
   flex-direction: column;
-  gap: $spacing-md;
+  gap: 12px;
   min-width: 0;
-  padding: $spacing-md;
+  padding: 12px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
 
@@ -194,7 +195,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: $spacing-md;
+  gap: 12px;
   min-width: 0;
 
   > div {
@@ -226,11 +227,11 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  min-height: 30px;
+  min-height: 28px;
   max-width: 100%;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--primary-color) 26%, var(--border-color));
-  border-radius: 999px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--primary-color) 9%, var(--bg-primary));
   color: var(--text-primary);
   font-size: 12px;
@@ -295,7 +296,7 @@
 .managerConfigGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: $spacing-md;
+  gap: 12px;
 
   :global(.form-group) {
     margin-bottom: 0;
@@ -309,7 +310,7 @@
 .managerField {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -320,11 +321,12 @@
 }
 
 .managerSelectTrigger {
-  height: 46px !important;
-  padding: 10px 12px !important;
+  height: 40px !important;
+  padding: 0 12px !important;
   background-color: var(--bg-primary) !important;
+  border-radius: 12px !important;
   box-shadow: none !important;
-  font-size: inherit !important;
+  font-size: 14px !important;
   font-weight: 400 !important;
 }
 
@@ -401,7 +403,11 @@
 
 .searchInput {
   flex: 1;
-  border-radius: 16px !important;
+  height: 38px;
+  min-height: 38px;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: 12px !important;
   padding-right: 132px !important;
 }
 
@@ -416,7 +422,7 @@
   align-items: center;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   color: var(--text-secondary);
@@ -431,9 +437,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
   background: var(--primary-color);
   border: 1px solid var(--primary-color);
   color: #fff;
@@ -459,11 +465,11 @@
   flex-shrink: 0;
 
   button {
-    min-width: 36px;
-    width: 36px;
-    height: 36px;
+    min-width: 34px;
+    width: 34px;
+    height: 34px;
     padding: 0 !important;
-    border-radius: 999px;
+    border-radius: 12px;
   }
 
   @include mobile {

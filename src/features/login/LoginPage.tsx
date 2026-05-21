@@ -693,7 +693,7 @@ export function LoginPage() {
                     rightElement={
                       <button
                         type="button"
-                        className="btn btn-ghost btn-sm"
+                        className="btn btn-ghost btn-xs btn-icon-only"
                         onClick={() => setShowKey((prev) => !prev)}
                         aria-label={showKey ? t('login.hide_key') : t('login.show_key')}
                         title={showKey ? t('login.hide_key') : t('login.show_key')}

@@ -64,7 +64,7 @@ export function ProviderList<T>({
             <div className={actionsClassName ?? 'item-actions'}>
               <Button
                 variant="secondary"
-                size="sm"
+                size="xs"
                 onClick={() => onEdit(item, index)}
                 disabled={actionsDisabled}
               >
@@ -72,7 +72,7 @@ export function ProviderList<T>({
               </Button>
               <Button
                 variant="danger"
-                size="sm"
+                size="xs"
                 onClick={() => onDelete(item, index)}
                 disabled={actionsDisabled}
               >
