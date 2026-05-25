@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import type { ManagerBindingStatus } from '../ConfigPage';
 import styles from '../ConfigPage.module.scss';
 
 type ManagerConfigPanelProps = {
@@ -11,6 +12,10 @@ type ManagerConfigPanelProps = {
   detectedPanelBase: string;
   managerRuntimeModeLabel: string;
   managerServiceBase: string;
+  managerAdminKey: string;
+  currentCPAApiBase: string;
+  managerBoundCPABase: string;
+  managerBindingStatus: ManagerBindingStatus;
   disableControls: boolean;
   canConfigureRequestMonitoring: boolean;
   managerRequestMonitoringEnabled: boolean;
@@ -24,6 +29,7 @@ type ManagerConfigPanelProps = {
   managerUsageStatisticsEnabled: boolean;
   onRefresh: () => void;
   onManagerServiceBaseChange: (value: string) => void;
+  onManagerAdminKeyChange: (value: string) => void;
   onRequestMonitoringChange: (value: boolean) => void;
   onCollectorModeChange: (value: string) => void;
   onPollIntervalMsChange: (value: string) => void;
@@ -37,6 +43,10 @@ export function ManagerConfigPanel({
   detectedPanelBase,
   managerRuntimeModeLabel,
   managerServiceBase,
+  managerAdminKey,
+  currentCPAApiBase,
+  managerBoundCPABase,
+  managerBindingStatus,
   disableControls,
   canConfigureRequestMonitoring,
   managerRequestMonitoringEnabled,
@@ -50,6 +60,7 @@ export function ManagerConfigPanel({
   managerUsageStatisticsEnabled,
   onRefresh,
   onManagerServiceBaseChange,
+  onManagerAdminKeyChange,
   onRequestMonitoringChange,
   onCollectorModeChange,
   onPollIntervalMsChange,
@@ -57,6 +68,13 @@ export function ManagerConfigPanel({
   onQueryLimitChange,
 }: ManagerConfigPanelProps) {
   const { t } = useTranslation();
+  const isExternalPanel = panelHostedByUsageService !== true;
+  const bindingNoteClass =
+    managerBindingStatus === 'matched'
+      ? styles.managerStatusSuccess
+      : managerBindingStatus === 'mismatched'
+        ? styles.managerStatusDanger
+        : styles.managerStatusWarning;
 
   return (
     <div className={styles.managerConfigPanel}>
@@ -91,15 +109,45 @@ export function ManagerConfigPanel({
             </div>
           </div>
         ) : (
-          <Input
-            label={t('config_management.manager.external_service_base')}
-            placeholder="http://127.0.0.1:18317"
-            value={managerServiceBase}
-            onChange={(event) => onManagerServiceBaseChange(event.target.value)}
-            disabled={disableControls || managerLoading}
-            hint={t('config_management.manager.external_service_hint')}
-          />
+          <>
+            <div className={styles.managerConfigGrid}>
+              <Input
+                label={t('config_management.manager.external_service_base')}
+                placeholder="http://127.0.0.1:18317"
+                value={managerServiceBase}
+                onChange={(event) => onManagerServiceBaseChange(event.target.value)}
+                disabled={disableControls || managerLoading}
+                hint={t('config_management.manager.external_service_hint')}
+              />
+              <Input
+                label={t('config_management.manager.admin_key_label')}
+                type="password"
+                placeholder={t('config_management.manager.admin_key_placeholder')}
+                value={managerAdminKey}
+                onChange={(event) => onManagerAdminKeyChange(event.target.value)}
+                disabled={disableControls || managerLoading}
+                autoComplete="off"
+                hint={t('config_management.manager.admin_key_hint')}
+              />
+            </div>
+            <div className={styles.managerReadonlyGrid}>
+              <div>
+                <span>{t('config_management.manager.current_cpa_base')}</span>
+                <strong>{currentCPAApiBase || t('config_management.manager.not_bound')}</strong>
+              </div>
+              <div>
+                <span>{t('config_management.manager.bound_cpa_base')}</span>
+                <strong>{managerBoundCPABase || t('config_management.manager.not_bound')}</strong>
+              </div>
+            </div>
+          </>
         )}
+
+        {isExternalPanel && managerBindingStatus !== 'unknown' ? (
+          <div className={`${styles.managerStatusNote} ${bindingNoteClass}`}>
+            {t(`config_management.manager.binding_${managerBindingStatus}`)}
+          </div>
+        ) : null}
       </section>
 
       <section className={styles.managerSection}>
