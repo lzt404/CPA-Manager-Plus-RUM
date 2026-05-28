@@ -61,11 +61,6 @@ export type RealtimeEventsPanelActionsProps = {
 
 const REALTIME_PAGE_SIZE_OPTIONS = [10, 50, 100, 150, 300] as const;
 
-const buildRealtimeMetaText = (row: MonitoringEventRow) => {
-  const text = `${row.endpointMethod} ${row.endpointPath}`.trim();
-  return maskSensitiveText(text || '-');
-};
-
 const formatOptionalText = (value: string | null | undefined) => {
   const trimmed = String(value || '').trim();
   return trimmed || '-';
@@ -103,10 +98,21 @@ const formatRealtimeCompactDuration = (value: number | null | undefined, locale:
     }
   };
 
-  if (parsed < 1000) return `${formatNumber(Math.round(parsed), 0)}ms`;
+  if (parsed < 1000) return `${formatNumber(Math.round(parsed), 0)} ms`;
 
   const seconds = parsed / 1000;
-  return `${formatNumber(seconds, seconds < 10 ? 2 : 1)}s`;
+  return `${formatNumber(seconds, seconds < 10 ? 2 : 1)} s`;
+};
+
+const getRealtimeDurationToneClass = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+
+  if (parsed >= 30000) return styles.badText;
+  if (parsed >= 15000) return styles.warnText;
+  return styles.goodText;
 };
 
 const formatRealtimeDateParts = (timestampMs: number, locale: string) => {
@@ -231,7 +237,17 @@ export function RealtimeEventsPanel({
               <th>{t('monitoring.column_success_rate')}</th>
               <th>{t('monitoring.total_calls')}</th>
               <th className={styles.realtimeTpsColumn}>{t('monitoring.column_output_tps')}</th>
-              <th>{t('monitoring.column_latency')}</th>
+              <th className={styles.realtimeLatencyColumn}>
+                <span className={styles.realtimeLatencyHeader}>
+                  <span className={styles.realtimeMetricLeft}>
+                    {t('monitoring.ttft_short')}
+                  </span>
+                  <span className={styles.realtimeMetricSeparator}>｜</span>
+                  <span className={styles.realtimeMetricRight}>
+                    {t('monitoring.elapsed_short')}
+                  </span>
+                </span>
+              </th>
               <th>{t('monitoring.column_time')}</th>
               <th>{t('monitoring.this_call_usage')}</th>
               <th>{t('monitoring.this_call_cost')}</th>
@@ -250,13 +266,9 @@ export function RealtimeEventsPanel({
                 ? `${tooltipIdPrefix}-failure-tooltip-${row.id}`
                 : undefined;
               const timeParts = formatRealtimeDateParts(row.timestampMs, locale);
-              const latencyToneClass =
-                row.latencyMs !== null && row.latencyMs >= 30000
-                  ? styles.badText
-                  : row.latencyMs !== null && row.latencyMs >= 15000
-                    ? styles.warnText
-                    : undefined;
               const hasTtftMs = row.ttftMs !== null && row.ttftMs !== undefined;
+              const ttftToneClass = getRealtimeDurationToneClass(row.ttftMs);
+              const latencyToneClass = getRealtimeDurationToneClass(row.latencyMs);
               return (
                 <tr key={row.id} className={row.failed ? styles.logRowFailed : undefined}>
                   <td>
@@ -271,11 +283,8 @@ export function RealtimeEventsPanel({
                     <div className={styles.primaryCell}>
                       <span className={styles.monoCell}>{row.model}</span>
                       {showResolvedModel ? (
-                        <small className={styles.monoCell}>
-                          {t('monitoring.resolved_model_label', { model: row.resolvedModel })}
-                        </small>
+                        <small className={styles.monoCell}>{row.resolvedModel}</small>
                       ) : null}
-                      <small className={styles.monoCell}>{buildRealtimeMetaText(row)}</small>
                     </div>
                   </td>
                   <td>
@@ -369,34 +378,30 @@ export function RealtimeEventsPanel({
                       {formatTokensPerSecond(row.tokensPerSecond, locale)}
                     </span>
                   </td>
-                  <td>
+                  <td className={styles.realtimeLatencyColumn}>
                     <div className={styles.realtimeMetricCell}>
-                      {hasTtftMs ? (
-                        <span
-                          className={`${styles.realtimeMetricLine} ${styles.realtimeMetricTtft}`}
-                        >
-                          <span className={styles.realtimeMetricLabel}>
-                            {t('monitoring.ttft_short')}
-                          </span>
-                          <span className={styles.realtimeMetricValue}>
-                            {formatRealtimeCompactDuration(row.ttftMs, locale)}
-                          </span>
-                        </span>
-                      ) : null}
                       <span
                         className={[
-                          styles.realtimeMetricLine,
+                          styles.realtimeMetricText,
+                          styles.realtimeMetricLeft,
+                          ttftToneClass,
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {hasTtftMs ? formatRealtimeCompactDuration(row.ttftMs, locale) : '--'}
+                      </span>
+                      <span className={styles.realtimeMetricSeparator}>｜</span>
+                      <span
+                        className={[
+                          styles.realtimeMetricText,
+                          styles.realtimeMetricRight,
                           latencyToneClass,
                         ]
                           .filter(Boolean)
                           .join(' ')}
                       >
-                        <span className={styles.realtimeMetricLabel}>
-                          {t('monitoring.elapsed_short')}
-                        </span>
-                        <span className={styles.realtimeMetricValue}>
-                          {formatRealtimeCompactDuration(row.latencyMs, locale)}
-                        </span>
+                        {formatRealtimeCompactDuration(row.latencyMs, locale)}
                       </span>
                     </div>
                   </td>

@@ -1241,28 +1241,37 @@
   line-height: 1.25;
 }
 
-.realtimeMetricLine,
 .realtimeTimeLine,
 .realtimeTpsCell {
   white-space: nowrap;
 }
 
-.realtimeMetricLine {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+.realtimeLatencyColumn {
+  text-align: center !important;
 }
 
-.realtimeMetricLabel {
-  color: var(--monitor-muted);
+.realtimeLatencyHeader {
+  display: inline-grid;
+  grid-template-columns: minmax(42px, 1fr) 10px minmax(42px, 1fr);
+  align-items: center;
+  justify-content: center;
+  width: 118px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-transform: none;
+  white-space: nowrap;
 }
 
-.realtimeMetricValue {
-  color: inherit;
-}
-
-.realtimeMetricTtft {
-  color: var(--monitor-ink);
+.realtimeMetricCell {
+  display: inline-grid;
+  grid-template-columns: minmax(48px, 1fr) 10px minmax(48px, 1fr);
+  align-items: center;
+  justify-content: center;
+  width: 118px;
+  min-width: 118px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .realtimeTpsColumn {
@@ -1280,10 +1289,46 @@
 }
 
 .realtimeTimeLine {
-  width: 82px;
-  font-size: 11px;
+  width: 92px;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.35;
+  line-height: 1.3;
+}
+
+.realtimeMetricText {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.realtimeMetricLeft {
+  min-width: 0;
+  text-align: right;
+}
+
+.realtimeMetricRight {
+  min-width: 0;
+  text-align: left;
+}
+
+.realtimeMetricText.goodText {
+  color: var(--monitor-green);
+}
+
+.realtimeMetricText.warnText {
+  color: var(--monitor-amber);
+}
+
+.realtimeMetricText.badText {
+  color: var(--monitor-red);
+}
+
+.realtimeMetricSeparator {
+  color: var(--monitor-line);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .logTypeCell {

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MonitoringEventRow } from '@/features/monitoring/hooks/useMonitoringData';
 import { RealtimeEventsPanel } from './RealtimeEventsPanel';
 
-const t = ((key: string, options?: Record<string, string>) => {
+const t = ((key: string) => {
   const messages: Record<string, string> = {
     'common.loading': 'Loading',
     'common.copy': 'Copy',
@@ -33,9 +33,6 @@ const t = ((key: string, options?: Record<string, string>) => {
     'monitoring.this_call_usage': 'Usage',
     'monitoring.ttft_short': 'TTFT',
   };
-  if (key === 'monitoring.resolved_model_label') {
-    return `Resolved ${options?.model ?? ''}`.trim();
-  }
   return messages[key] ?? key;
 }) as unknown as TFunction;
 
@@ -156,11 +153,15 @@ describe('RealtimeEventsPanel', () => {
     expect(markup).toContain('<th>Effort</th>');
     expect(markup).toContain('>TPS</th>');
     expect(markup).toContain('medium');
+    expect(markup).toContain('client-gpt');
+    expect(markup).toContain('gpt-5.4');
+    expect(markup).not.toContain('Resolved');
+    expect(markup).not.toContain('POST /v1/chat/completions');
     expect(markup).toContain('Failed');
-    expect(markup).toContain('TTFT');
-    expect(markup).toContain('500ms');
+    expect(markup).toMatch(/TTFT<\/span><span class="[^"]+">｜<\/span><span class="[^"]+">Elapsed/);
+    expect(markup).toContain('500 ms');
     expect(markup).toContain('Elapsed');
-    expect(markup).toContain('1.5s');
+    expect(markup).toContain('1.5 s');
     expect(markup).toContain('20');
     expect(markup).toContain('I 10 · O 20 · C 5');
     expect(markup).not.toContain('Read 4');
@@ -180,7 +181,7 @@ describe('RealtimeEventsPanel', () => {
     expect(markup).toContain('<th>Effort</th>');
     expect(markup).toContain('>TPS</th>');
     expect(markup).toContain('Success');
-    expect(markup).toContain('TTFT');
+    expect(markup).toMatch(/TTFT<\/span><span class="[^"]+">｜<\/span><span class="[^"]+">Elapsed/);
     expect(markup).toContain(expectedDate);
     expect(markup).toContain(expectedTime);
     expect(markup).toContain('I 10 · O 20 · C 5');
@@ -191,12 +192,31 @@ describe('RealtimeEventsPanel', () => {
     expect(markup).not.toContain('HTTP');
   });
 
-  it('hides ttft latency details when ttft is missing', () => {
+  it('renders a ttft placeholder when ttft is missing', () => {
     const markup = renderPanel(baseRow({ ttftMs: null }));
 
     expect(markup).toContain('>TPS</th>');
-    expect(markup).not.toContain('TTFT');
-    expect(markup).not.toContain('TTFT --');
+    expect(markup).toMatch(/TTFT<\/span><span class="[^"]+">｜<\/span><span class="[^"]+">Elapsed/);
+    expect(markup).not.toContain('500 ms');
+    expect(markup).toContain('1.5 s');
+    expect(markup).toMatch(
+      /--<\/span><span class="[^"]+">｜<\/span><span class="[^"]*realtimeMetricText[^"]*realtimeMetricRight[^"]*">1\.5 s<\/span>/
+    );
+  });
+
+  it('keeps latency warning and error tone classes on plain text metrics', () => {
+    const warningMarkup = renderPanel(baseRow({ latencyMs: 20_000, ttftMs: 1_000 }));
+    const errorMarkup = renderPanel(baseRow({ latencyMs: 35_000, ttftMs: 1_000 }));
+
+    expect(warningMarkup).toMatch(/class="[^"]*realtimeMetricText[^"]*warnText[^"]*"/);
+    expect(errorMarkup).toMatch(/class="[^"]*realtimeMetricText[^"]*badText[^"]*"/);
+  });
+
+  it('colors normal millisecond and second metrics green for both ttft and elapsed time', () => {
+    const markup = renderPanel(baseRow({ latencyMs: 470, ttftMs: 120 }));
+
+    expect(markup).toMatch(/class="[^"]*realtimeMetricText[^"]*realtimeMetricLeft[^"]*goodText[^"]*">120 ms/);
+    expect(markup).toMatch(/class="[^"]*realtimeMetricText[^"]*realtimeMetricRight[^"]*goodText[^"]*">470 ms/);
   });
 
   it('renders residual cached tokens even when they equal cache read tokens', () => {
