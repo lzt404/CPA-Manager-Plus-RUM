@@ -7,6 +7,7 @@ import {
 } from '@/utils/quota';
 import {
   getTypeLabel,
+  normalizeProviderKey,
   parsePriorityValue,
 } from '@/features/authFiles/constants';
 
@@ -17,8 +18,7 @@ export const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 export const DEFAULT_REGULAR_PAGE_SIZE = 9;
 export const DEFAULT_COMPACT_PAGE_SIZE = 12;
 
-const escapeWildcardSearchSegment = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const buildWildcardSearch = (value: string): RegExp | null => {
   if (!value.includes('*')) return null;
@@ -27,9 +27,246 @@ export const buildWildcardSearch = (value: string): RegExp | null => {
 };
 
 const PREMIUM_CODEX_PLAN_TYPES = new Set(['pro', 'prolite', 'pro-lite', 'pro_lite']);
+const CODEX_WEEKLY_WINDOW_SECONDS = 604_800;
+const UNKNOWN_AUTH_INDEX_KEY = '-';
+
+export const AUTH_FILES_CODEX_STATUS_FILTERS = [
+  'all',
+  'http_401',
+  'reauth',
+  'weekly_limited',
+  'disabled_with_reset',
+] as const;
+
+export type AuthFilesCodexStatusFilter = (typeof AUTH_FILES_CODEX_STATUS_FILTERS)[number];
+export type AuthFileCodexStatusBadgeTone = 'danger' | 'warning' | 'info';
+export type AuthFileCodexStatusBadgeKind =
+  | 'http_401'
+  | 'reauth'
+  | 'weekly_limited'
+  | 'disabled_with_reset';
+
+export type AuthFileCodexStatusBadge = {
+  kind: AuthFileCodexStatusBadgeKind;
+  tone: AuthFileCodexStatusBadgeTone;
+  labelKey: string;
+  defaultLabel: string;
+  titleKey?: string;
+  defaultTitle?: string;
+  labelParams?: Record<string, string | number>;
+};
+
+export type AuthFileCodexStatusSummary = {
+  isCodex: boolean;
+  isHttp401: boolean;
+  needsReauth: boolean;
+  isWeeklyLimited: boolean;
+  hasDisabledWeeklyReset: boolean;
+  weeklyResetLabel: string | null;
+  weeklyUsedPercent: number | null;
+  badges: AuthFileCodexStatusBadge[];
+};
+
+export type AuthFileCodexInspectionSnapshot = {
+  fileName: string;
+  authIndex?: string | number | null;
+  statusCode?: number | string | null;
+  action?: string | null;
+  usedPercent?: number | string | null;
+  isQuota?: boolean | null;
+};
+
+const CODEX_STATUS_FILTER_SET = new Set<AuthFilesCodexStatusFilter>(
+  AUTH_FILES_CODEX_STATUS_FILTERS
+);
 
 export const compareAuthFileName = (left: { name: string }, right: { name: string }) =>
   left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
+
+const normalizeNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeAuthIndexKey = (value: unknown): string => {
+  if (value === undefined || value === null) return UNKNOWN_AUTH_INDEX_KEY;
+  const normalized = String(value).trim();
+  return normalized || UNKNOWN_AUTH_INDEX_KEY;
+};
+
+const isCodexAuthFile = (file: AuthFileItem): boolean =>
+  normalizeProviderKey(String(file.type ?? file.provider ?? '')) === 'codex';
+
+const isKnownResetLabel = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed !== '-';
+};
+
+const findCodexWeeklyQuotaWindow = (quota?: CodexQuotaState) =>
+  quota?.windows.find((window) => {
+    if (window.limitWindowSeconds === CODEX_WEEKLY_WINDOW_SECONDS) return true;
+    if (window.id === 'weekly' || window.id.endsWith('-weekly')) return true;
+    if (window.labelKey?.includes('secondary_window')) return true;
+    return false;
+  }) ?? null;
+
+export const normalizeAuthFilesCodexStatusFilter = (
+  value: unknown
+): AuthFilesCodexStatusFilter | null =>
+  CODEX_STATUS_FILTER_SET.has(value as AuthFilesCodexStatusFilter)
+    ? (value as AuthFilesCodexStatusFilter)
+    : null;
+
+export const getAuthFileCodexInspectionKey = (fileName: string, authIndex?: unknown) =>
+  `${fileName}::${normalizeAuthIndexKey(authIndex)}`;
+
+export const getAuthFileCodexInspectionKeyForFile = (file: AuthFileItem) =>
+  getAuthFileCodexInspectionKey(file.name, file.authIndex ?? file['auth_index']);
+
+export const buildAuthFileCodexInspectionMap = (
+  items: AuthFileCodexInspectionSnapshot[]
+): Map<string, AuthFileCodexInspectionSnapshot> => {
+  const map = new Map<string, AuthFileCodexInspectionSnapshot>();
+  items.forEach((item) => {
+    if (!item.fileName) return;
+    map.set(getAuthFileCodexInspectionKey(item.fileName, item.authIndex), item);
+  });
+  return map;
+};
+
+export const getAuthFileCodexStatus = (
+  file: AuthFileItem,
+  quota?: CodexQuotaState,
+  inspection?: AuthFileCodexInspectionSnapshot
+): AuthFileCodexStatusSummary => {
+  const isCodex = isCodexAuthFile(file);
+  if (!isCodex) {
+    return {
+      isCodex: false,
+      isHttp401: false,
+      needsReauth: false,
+      isWeeklyLimited: false,
+      hasDisabledWeeklyReset: false,
+      weeklyResetLabel: null,
+      weeklyUsedPercent: null,
+      badges: [],
+    };
+  }
+
+  const weeklyWindow = findCodexWeeklyQuotaWindow(quota);
+  const weeklyWindowUsedPercent = normalizeNumber(weeklyWindow?.usedPercent);
+  const inspectionUsedPercent =
+    inspection?.isQuota === true ? normalizeNumber(inspection?.usedPercent) : null;
+  const weeklyUsedPercent = weeklyWindowUsedPercent ?? inspectionUsedPercent;
+  const weeklyResetLabel = isKnownResetLabel(weeklyWindow?.resetLabel)
+    ? weeklyWindow.resetLabel.trim()
+    : null;
+  const statusCode =
+    normalizeNumber(inspection?.statusCode) ??
+    normalizeNumber(
+      file.errorStatus ?? file['error_status'] ?? file.statusCode ?? file['status_code']
+    ) ??
+    normalizeNumber(quota?.errorStatus);
+  const action = typeof inspection?.action === 'string' ? inspection.action : '';
+  const isHttp401 = statusCode === 401;
+  const needsReauth = action === 'reauth';
+  const inspectionReachedQuota =
+    inspection?.isQuota === true &&
+    (action === 'disable' ||
+      (weeklyUsedPercent !== null && weeklyUsedPercent >= 100) ||
+      (file.disabled === true && action === 'keep'));
+  const isWeeklyLimited =
+    (weeklyUsedPercent !== null && weeklyUsedPercent >= 100) || inspectionReachedQuota;
+  const hasDisabledWeeklyReset = file.disabled === true && weeklyResetLabel !== null;
+  const badges: AuthFileCodexStatusBadge[] = [];
+
+  if (needsReauth) {
+    badges.push({
+      kind: 'reauth',
+      tone: 'danger',
+      labelKey: 'auth_files.codex_status_badge_reauth',
+      defaultLabel: 'Reauth needed',
+      titleKey: 'auth_files.codex_status_badge_reauth_title',
+      defaultTitle: 'HTTP 401: this Codex account needs a fresh login',
+    });
+  } else if (isHttp401) {
+    badges.push({
+      kind: 'http_401',
+      tone: 'danger',
+      labelKey: 'auth_files.codex_status_badge_http_401',
+      defaultLabel: 'HTTP 401',
+      titleKey: 'auth_files.codex_status_badge_http_401_title',
+      defaultTitle: 'The latest Codex check returned HTTP 401',
+    });
+  }
+
+  if (isWeeklyLimited) {
+    badges.push({
+      kind: 'weekly_limited',
+      tone: 'warning',
+      labelKey: 'auth_files.codex_status_badge_weekly_limited',
+      defaultLabel: 'Weekly limited',
+      titleKey: 'auth_files.codex_status_badge_weekly_limited_title',
+      defaultTitle: 'Weekly Codex quota is at or above the configured limit',
+    });
+  }
+
+  if (hasDisabledWeeklyReset && weeklyResetLabel) {
+    badges.push({
+      kind: 'disabled_with_reset',
+      tone: 'info',
+      labelKey: 'auth_files.codex_status_badge_disabled_reset',
+      defaultLabel: `Weekly reset ${weeklyResetLabel}`,
+      titleKey: 'auth_files.codex_status_badge_disabled_reset_title',
+      defaultTitle: `This disabled Codex account has a weekly reset time: ${weeklyResetLabel}`,
+      labelParams: { reset: weeklyResetLabel },
+    });
+  }
+
+  return {
+    isCodex,
+    isHttp401,
+    needsReauth,
+    isWeeklyLimited,
+    hasDisabledWeeklyReset,
+    weeklyResetLabel,
+    weeklyUsedPercent,
+    badges,
+  };
+};
+
+export const authFileMatchesCodexStatusFilter = (
+  status: AuthFileCodexStatusSummary,
+  filter: AuthFilesCodexStatusFilter
+): boolean => {
+  if (filter === 'all') return true;
+  if (!status.isCodex) return false;
+  if (filter === 'http_401') return status.isHttp401;
+  if (filter === 'reauth') return status.needsReauth;
+  if (filter === 'weekly_limited') return status.isWeeklyLimited;
+  if (filter === 'disabled_with_reset') return status.hasDisabledWeeklyReset;
+  return true;
+};
+
+const getAuthFileCodexStatusSearchValues = (
+  status: AuthFileCodexStatusSummary | undefined,
+  t: TFunction
+) =>
+  status?.badges.flatMap((badge) => [
+    badge.kind,
+    badge.labelKey,
+    badge.defaultLabel,
+    t(badge.labelKey, { defaultValue: badge.defaultLabel, ...badge.labelParams }),
+    badge.defaultTitle,
+    badge.titleKey
+      ? t(badge.titleKey, { defaultValue: badge.defaultTitle ?? badge.defaultLabel })
+      : null,
+  ]) ?? [];
 
 const getAuthFileNoteValue = (file: AuthFileItem): string => {
   const raw = file.note ?? file['note'];
@@ -90,10 +327,7 @@ export const stringifySearchValue = (value: unknown): string[] => {
   return [];
 };
 
-const getCodexPlanLabel = (
-  planType: string | null | undefined,
-  t: TFunction
-): string | null => {
+const getCodexPlanLabel = (planType: string | null | undefined, t: TFunction): string | null => {
   const normalized = normalizePlanType(planType);
   if (!normalized) return null;
   if (normalized === 'pro') return t('codex_quota.plan_pro');
@@ -126,7 +360,8 @@ export const getAuthFilePlanSortRank = (
 export const getAuthFileSearchValues = (
   file: AuthFileItem,
   t: TFunction,
-  quota?: CodexQuotaState
+  quota?: CodexQuotaState,
+  codexStatus?: AuthFileCodexStatusSummary
 ) => {
   const planType = getAuthFilePlanType(file, quota);
   const planLabel = getCodexPlanLabel(planType, t);
@@ -153,5 +388,6 @@ export const getAuthFileSearchValues = (
     planType,
     planLabel,
     accountId,
+    getAuthFileCodexStatusSearchValues(codexStatus, t),
   ];
 };
