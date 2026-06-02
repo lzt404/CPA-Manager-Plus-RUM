@@ -9,7 +9,7 @@ Since v6.10.0, CPA no longer includes built-in usage statistics. This project no
 CPA Manager Plus is the recommended successor to CPA-Manager. It combines the CPA management panel with a Docker-ready Manager Server, admin-key protected full-panel mode, encrypted CPA Management Key storage, server-backed analytics, model pricing, API key aliases, dashboard cards, and Codex account inspection.
 
 - **CPA Main project**: https://github.com/router-for-me/CLIProxyAPI
-- **Recommended CPA version**: >= v7.1.18
+- **Recommended CPA version**: >= v7.1.39
 - **Minimum CPA version for HTTP usage queue**: >= v6.10.8
 
 ## Panel Preview
@@ -59,7 +59,8 @@ Request statistics require the CPA usage queue:
 - CPA Management must be enabled because the usage queue uses the same availability and CPA Management Key as `/v0/management`.
 - Request monitoring requires CPA usage publishing: set `usage-statistics-enabled: true`, or submit `{ "value": true }` to `PUT /usage-statistics-enabled`. CPA Manager Plus enables this automatically when request monitoring is enabled during setup or configuration save.
 - Disabling CPAM request monitoring only stops the Manager Server collector. It does not automatically disable CPA usage publishing or clear the CPA usage queue. If CPA usage publishing remains enabled, re-enabling request monitoring within the queue retention window may collect events retained while the collector was stopped.
-- CPA `v7.1.18+` is recommended for current panel capabilities and the full Redis usage metadata set used by newer monitoring views: request-side `reasoning_effort`, `tokens.cache_read_tokens`, `tokens.cache_creation_tokens`, `fail.status_code`, and `fail.body`. CPA `v6.10.8+` already exposes the HTTP usage queue endpoint `/v0/management/usage-queue`, which can pass through regular HTTP reverse proxies. Older compatible CPA versions omit these optional fields; CPA Manager Plus still imports and collects those events, with missing string fields shown as empty/unknown and missing numeric fields treated as `0`.
+- CPA `v7.1.39+` is recommended for current panel capabilities and the full Redis usage metadata set used by newer monitoring views: request-side `reasoning_effort`, `service_tier`, `executor_type`, `tokens.cache_read_tokens`, `tokens.cache_creation_tokens`, `fail.status_code`, and `fail.body`. CPA `v6.10.8+` already exposes the HTTP usage queue endpoint `/v0/management/usage-queue`, which can pass through regular HTTP reverse proxies. Older compatible CPA versions omit these optional fields; CPA Manager Plus still imports and collects those events, with missing string fields shown as empty/unknown and missing numeric fields treated as `0`.
+- CPA `v7.1.39+` RESP Pub/Sub emits usage control messages such as `{"support_refresh":true}` and `{"refresh":true}`. Current CPA Manager Plus filters those control messages instead of storing them as empty request rows; refresh messages also clear the auth snapshot cache so account metadata is re-read after CPA auth/config changes.
 - `reasoning_effort` is the request-side reasoning configuration. It is not actual reasoning token usage; actual reasoning consumption is still reported by `tokens.reasoning_tokens`.
 - Manager Server `auto` mode tries RESP Pub/Sub (`subscribe`) first, then the HTTP usage queue, then RESP pop mode for older CPA versions. RESP transports listen on the CPA API port, usually `8317`, and cannot pass through a regular HTTP reverse proxy.
 - CPA keeps queue items in memory for `redis-usage-queue-retention-seconds`, default `60` seconds and maximum `3600` seconds. Keep Manager Server running continuously.
@@ -371,7 +372,7 @@ Failure bodies from CPA usage events are treated as sensitive diagnostics. Manag
 ## Feature Overview
 
 - **Dashboard**: connection state, backend version, quick health summary
-- **Configuration**: visual/source editing for CPA configuration and separate CPA Manager Plus configuration
+- **Configuration**: visual/source editing for CPA configuration, including Codex `identity-confuse`, and separate CPA Manager Plus configuration
 - **AI Providers**: Gemini, Codex, Claude, Vertex, OpenAI-compatible providers, and Ampcode
 - **Auth Files**: upload, download, delete, status, OAuth exclusions, model aliases
 - **Quota**: quota views for supported providers
@@ -422,6 +423,7 @@ go run ./cmd/cpa-manager-plus
 - **Full Docker mode opens the login form instead of setup**: Manager Server is already configured. Enter the admin key; the CPA URL comes from the server-side configuration.
 - **Wrong default CPA URL in first setup**: rebuild the panel with `VITE_DEFAULT_CPA_BASE_URL=<your-cpa-url>` or enter the correct CPA URL manually.
 - **Monitoring is empty**: enable CPA usage publishing, verify Manager Server `/status`, and confirm only one consumer is running.
+- **Realtime monitoring shows empty `-` request rows after upgrading CPA**: upgrade CPA Manager Plus. CPA `v7.1.39+` sends Pub/Sub control messages; older CPAM builds may store them as empty usage events.
 - **`unsupported RESP prefix 'H'`**: upgrade CPA to `v6.10.8+` or keep `USAGE_COLLECTOR_MODE=http` for reverse-proxied HTTP queue access. RESP Pub/Sub/RESP pop modes require the CPA URL to be a container/host direct address for port `8317`, not a regular HTTP reverse-proxy domain.
 - **CPA panel still shows the old panel**: verify that CPA **Panel Repository** is `https://github.com/seakee/CPA-Manager-Plus`. If the new panel still does not load, clear CPA's cached panel file and reload or restart CPA:
   ```bash
