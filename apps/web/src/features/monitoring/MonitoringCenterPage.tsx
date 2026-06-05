@@ -301,6 +301,8 @@ export function MonitoringCenterPage() {
     filteredRows,
     eventsHasMore,
     eventsLoadingMore,
+    eventsTotalCount,
+    eventsLoadedCount,
     lastRefreshedAt: monitoringLastRefreshedAt,
     isTransitioningScope: monitoringScopeTransitioning,
     hasPresentationSnapshot: hasMonitoringPresentationSnapshot,
@@ -1313,6 +1315,8 @@ export function MonitoringCenterPage() {
               failedOnlyActive={failedOnlyActive}
               eventsHasMore={eventsHasMore}
               eventsLoadingMore={eventsLoadingMore}
+              eventsTotalCount={eventsTotalCount}
+              eventsLoadedCount={eventsLoadedCount}
               overallLoading={overallLoading}
               hasPrices={hasPrices}
               locale={i18n.language}

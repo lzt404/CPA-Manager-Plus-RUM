@@ -1891,7 +1891,9 @@
     "page_size_label": "Per page",
     "page_size_option": "{{count}} / page",
     "load_more_events": "Load more events",
-    "no_more_events": "No more events"
+    "no_more_events": "No more events",
+    "events_loaded_summary": "Loaded {{loaded}} of {{total}} events",
+    "events_all_loaded": "All {{total}} events loaded"
   },
   "logs": {
     "title": "Logs Viewer",

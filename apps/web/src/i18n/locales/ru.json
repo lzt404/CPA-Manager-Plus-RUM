@@ -1887,7 +1887,9 @@
     "page_size_label": "На странице",
     "page_size_option": "{{count}} / стр.",
     "load_more_events": "Загрузить ещё события",
-    "no_more_events": "Больше событий нет"
+    "no_more_events": "Больше событий нет",
+    "events_loaded_summary": "Загружено {{loaded}} из {{total}} событий",
+    "events_all_loaded": "Все {{total}} событий загружены"
   },
   "logs": {
     "title": "Просмотр журналов",

@@ -1891,7 +1891,9 @@
     "page_size_label": "每页",
     "page_size_option": "{{count}} 条/页",
     "load_more_events": "加载更多事件",
-    "no_more_events": "没有更多事件"
+    "no_more_events": "没有更多事件",
+    "events_loaded_summary": "已加载 {{loaded}} / 共 {{total}} 条",
+    "events_all_loaded": "已加载全部 {{total}} 条"
   },
   "logs": {
     "title": "日志查看",

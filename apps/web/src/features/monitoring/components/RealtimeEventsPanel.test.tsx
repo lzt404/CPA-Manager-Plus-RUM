@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MonitoringEventRow } from '@/features/monitoring/hooks/useMonitoringData';
 import { RealtimeEventsPanel } from './RealtimeEventsPanel';
 
-const t = ((key: string) => {
+const t = ((key: string, options?: Record<string, unknown>) => {
   const messages: Record<string, string> = {
     'common.loading': 'Loading',
     'common.copy': 'Copy',
@@ -24,6 +24,8 @@ const t = ((key: string) => {
     'monitoring.load_more_events': 'Load more',
     'monitoring.log_rows': 'Rows',
     'monitoring.no_more_events': 'No more events',
+    'monitoring.events_loaded_summary': 'Loaded {{loaded}} of {{total}} events',
+    'monitoring.events_all_loaded': 'All {{total}} events loaded',
     'monitoring.reasoning_effort': 'Effort',
     'monitoring.reasoning_effort_short': 'Effort',
     'monitoring.recent_failures': 'Failures',
@@ -39,7 +41,13 @@ const t = ((key: string) => {
     'monitoring.this_call_usage': 'Usage',
     'monitoring.ttft_short': 'TTFT',
   };
-  return messages[key] ?? key;
+  let message = messages[key] ?? key;
+  if (options) {
+    message = message.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+      String((options as Record<string, unknown>)[name] ?? '')
+    );
+  }
+  return message;
 }) as unknown as TFunction;
 
 const noop = vi.fn();
@@ -49,6 +57,13 @@ type PanelRow = MonitoringEventRow & {
   successRate: number;
   streamKey: string;
   recentPattern: boolean[];
+};
+
+type PanelOverrides = {
+  eventsHasMore?: boolean;
+  eventsLoadingMore?: boolean;
+  eventsTotalCount?: number;
+  eventsLoadedCount?: number;
 };
 
 const baseRow = (overrides: Partial<PanelRow> = {}): PanelRow => ({
@@ -101,7 +116,7 @@ const baseRow = (overrides: Partial<PanelRow> = {}): PanelRow => ({
   ...overrides,
 });
 
-const renderPanel = (row: PanelRow) =>
+const renderPanel = (row: PanelRow, overrides: PanelOverrides = {}) =>
   renderToStaticMarkup(
     <RealtimeEventsPanel
       embedded
@@ -116,8 +131,10 @@ const renderPanel = (row: PanelRow) =>
       pageSize={10}
       scopedFailureCount={row.failed ? 1 : 0}
       failedOnlyActive={false}
-      eventsHasMore={false}
-      eventsLoadingMore={false}
+      eventsHasMore={overrides.eventsHasMore ?? false}
+      eventsLoadingMore={overrides.eventsLoadingMore ?? false}
+      eventsTotalCount={overrides.eventsTotalCount ?? 1}
+      eventsLoadedCount={overrides.eventsLoadedCount ?? 1}
       overallLoading={false}
       hasPrices={false}
       locale="en-US"
@@ -262,5 +279,39 @@ describe('RealtimeEventsPanel', () => {
     expect(markup).toContain('C 4');
     expect(markup).not.toContain('Read 4');
     expect(markup).not.toContain('Create 1');
+  });
+
+  it('shows the loaded vs total summary with a load-more action when more pages exist', () => {
+    const markup = renderPanel(baseRow(), {
+      eventsHasMore: true,
+      eventsLoadedCount: 500,
+      eventsTotalCount: 8000,
+    });
+
+    expect(markup).toContain('Loaded 500 of 8000 events');
+    expect(markup).toContain('Load more');
+    expect(markup).not.toContain('Loaded 8000 of 8000');
+  });
+
+  it('shows the all-loaded summary without a load-more action once fully loaded', () => {
+    const markup = renderPanel(baseRow(), {
+      eventsHasMore: false,
+      eventsLoadedCount: 8000,
+      eventsTotalCount: 8000,
+    });
+
+    expect(markup).toContain('All 8000 events loaded');
+    expect(markup).not.toContain('Load more');
+  });
+
+  it('falls back to the loaded count when the backend omits a larger total', () => {
+    const markup = renderPanel(baseRow(), {
+      eventsHasMore: true,
+      eventsLoadedCount: 500,
+      eventsTotalCount: 500,
+    });
+
+    expect(markup).toContain('Loaded 500 of 500 events');
+    expect(markup).toContain('Load more');
   });
 });

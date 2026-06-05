@@ -40,6 +40,8 @@ type RealtimeEventsPanelProps = {
   failedOnlyActive: boolean;
   eventsHasMore: boolean;
   eventsLoadingMore: boolean;
+  eventsTotalCount: number;
+  eventsLoadedCount: number;
   overallLoading: boolean;
   hasPrices: boolean;
   locale: string;
@@ -231,6 +233,8 @@ export function RealtimeEventsPanel({
   failedOnlyActive,
   eventsHasMore,
   eventsLoadingMore,
+  eventsTotalCount,
+  eventsLoadedCount,
   overallLoading,
   hasPrices,
   locale,
@@ -491,6 +495,14 @@ export function RealtimeEventsPanel({
       />
       {rows.length > 0 ? (
         <div className={styles.loadMoreEventsBar}>
+          <span className={styles.loadMoreEventsSummary}>
+            {eventsHasMore
+              ? t('monitoring.events_loaded_summary', {
+                  loaded: eventsLoadedCount,
+                  total: eventsTotalCount,
+                })
+              : t('monitoring.events_all_loaded', { total: eventsTotalCount })}
+          </span>
           {eventsHasMore ? (
             <Button
               variant="secondary"
@@ -500,9 +512,7 @@ export function RealtimeEventsPanel({
             >
               {eventsLoadingMore ? t('common.loading') : t('monitoring.load_more_events')}
             </Button>
-          ) : (
-            <span>{t('monitoring.no_more_events')}</span>
-          )}
+          ) : null}
         </div>
       ) : null}
     </>
