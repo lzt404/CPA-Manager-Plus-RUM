@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { TFunction } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
+import type { AccountDisplayMode } from '@/features/monitoring/accountOverviewState';
 import type { MonitoringEventRow } from '@/features/monitoring/hooks/useMonitoringData';
 import { RealtimeEventsPanel } from './RealtimeEventsPanel';
 
@@ -8,6 +9,10 @@ const t = ((key: string, options?: Record<string, unknown>) => {
   const messages: Record<string, string> = {
     'common.loading': 'Loading',
     'common.copy': 'Copy',
+    'monitoring.account_overview_account_display_masked': 'Masked',
+    'monitoring.account_overview_account_display_full': 'Full',
+    'monitoring.account_overview_show_full_accounts_hint': 'Show full accounts',
+    'monitoring.account_overview_show_masked_accounts_hint': 'Show masked accounts',
     'monitoring.cache_creation_tokens_short': 'Create',
     'monitoring.cache_read_tokens_short': 'Read',
     'monitoring.column_latency': 'Latency',
@@ -20,7 +25,9 @@ const t = ((key: string, options?: Record<string, unknown>) => {
     'monitoring.elapsed_short': 'Elapsed',
     'monitoring.executor_type_short': 'Executor',
     'monitoring.fail_status_code_short': 'HTTP',
+    'monitoring.filter_account': 'Account',
     'monitoring.filter_status_failed': 'Failed only',
+    'monitoring.filter_provider': 'Provider',
     'monitoring.load_more_events': 'Load more',
     'monitoring.log_rows': 'Rows',
     'monitoring.no_more_events': 'No more events',
@@ -60,6 +67,7 @@ type PanelRow = MonitoringEventRow & {
 };
 
 type PanelOverrides = {
+  accountDisplayMode?: AccountDisplayMode;
   eventsHasMore?: boolean;
   eventsLoadingMore?: boolean;
   eventsTotalCount?: number;
@@ -137,10 +145,12 @@ const renderPanel = (row: PanelRow, overrides: PanelOverrides = {}) =>
       eventsLoadedCount={overrides.eventsLoadedCount ?? 1}
       overallLoading={false}
       hasPrices={false}
+      accountDisplayMode={overrides.accountDisplayMode ?? 'masked'}
       locale="en-US"
       emptyState={<span>empty</span>}
       t={t}
       onToggleFailedOnly={noop}
+      onAccountDisplayModeChange={noop}
       onPageChange={noop}
       onPageSizeChange={noop}
       onLoadMoreEvents={noop}
@@ -206,6 +216,8 @@ describe('RealtimeEventsPanel', () => {
   it('renders safe defaults when optional usage fields are missing', () => {
     const markup = renderPanel(baseRow());
 
+    expect(markup).toContain('<colgroup>');
+    expect(markup.match(/<col\b/g)).toHaveLength(12);
     expect(markup).not.toContain('Effort -');
     expect(markup).toContain('<th>Effort</th>');
     expect(markup).toContain('>TPS</th>');
@@ -238,6 +250,46 @@ describe('RealtimeEventsPanel', () => {
     expect(markup).toContain('Masked key: sk-...cdef');
     expect(markup).toContain('Executor: codex');
     expect(markup).not.toContain('>Executor: codex<');
+  });
+
+  it('switches realtime source labels between masked and full display', () => {
+    const row = baseRow({
+      source: 'very-long-user@example.com',
+      sourceMasked: 'ver***@example.com',
+      account: 'very-long-user@example.com',
+      accountMasked: 'ver***@example.com',
+      authLabel: '',
+      channel: 'openai',
+      channelHost: '-',
+      provider: 'openai',
+    });
+    const maskedMarkup = renderPanel(row);
+    const fullMarkup = renderPanel(row, { accountDisplayMode: 'full' });
+
+    expect(maskedMarkup).toContain('>ver***@example.com</span>');
+    expect(maskedMarkup).toContain('title="ver***@example.com · Provider: openai · very-long-user@example.com');
+    expect(fullMarkup).toContain('>very-long-user@example.com</span>');
+    expect(fullMarkup).toContain('title="very-long-user@example.com · Provider: openai');
+  });
+
+  it('switches the primary source text instead of adding an account metadata line', () => {
+    const row = baseRow({
+      source: 'visible-user@example.com',
+      sourceMasked: 'vis***@example.com',
+      account: 'visible-user@example.com',
+      accountMasked: 'vis***@example.com',
+      authLabel: '',
+      channel: 'openai',
+      channelHost: '-',
+      provider: 'openai',
+    });
+    const maskedMarkup = renderPanel(row);
+    const fullMarkup = renderPanel(row, { accountDisplayMode: 'full' });
+
+    expect(maskedMarkup).toContain('>vis***@example.com</span>');
+    expect(maskedMarkup).not.toContain('<small>Account: vis***@example.com</small>');
+    expect(fullMarkup).toContain('>visible-user@example.com</span>');
+    expect(fullMarkup).not.toContain('<small>Account: visible-user@example.com</small>');
   });
 
   it('renders a ttft placeholder when ttft is missing', () => {

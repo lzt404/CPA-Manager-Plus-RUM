@@ -30,6 +30,7 @@ import {
   sortAccountRows,
   readAccountOverviewUiState,
   writeAccountOverviewUiState,
+  type AccountDisplayMode,
   type AccountOverviewPageResetState,
   type AccountSortKey,
   type AccountSortState,
@@ -182,6 +183,9 @@ export function MonitoringCenterPage() {
   );
   const [accountOverviewMode, setAccountOverviewMode] = useState<MonitoringAccountOverviewMode>(
     initialAccountOverviewUiState.current.mode
+  );
+  const [accountDisplayMode, setAccountDisplayMode] = useState<AccountDisplayMode>(
+    initialAccountOverviewUiState.current.accountDisplayMode
   );
   const [accountSort, setAccountSort] = useState<AccountSortState>(
     initialAccountOverviewUiState.current.sort
@@ -374,13 +378,20 @@ export function MonitoringCenterPage() {
   useEffect(() => {
     writeAccountOverviewUiState({
       mode: accountOverviewMode,
+      accountDisplayMode,
       sort: accountSort,
       cardPagination: {
         page: accountPageByMode.card,
         pageSize: accountPageSizeByMode.card,
       },
     });
-  }, [accountOverviewMode, accountPageByMode.card, accountPageSizeByMode.card, accountSort]);
+  }, [
+    accountDisplayMode,
+    accountOverviewMode,
+    accountPageByMode.card,
+    accountPageSizeByMode.card,
+    accountSort,
+  ]);
 
   useEffect(() => {
     writeMonitoringCenterUiState({
@@ -422,8 +433,14 @@ export function MonitoringCenterPage() {
   );
 
   const accountOptions = useMemo(
-    () => buildAccountOptions(monitoringFilterOptions.accountRows, selectedAccount, t),
-    [monitoringFilterOptions.accountRows, selectedAccount, t]
+    () =>
+      buildAccountOptions(
+        monitoringFilterOptions.accountRows,
+        selectedAccount,
+        t,
+        accountDisplayMode
+      ),
+    [accountDisplayMode, monitoringFilterOptions.accountRows, selectedAccount, t]
   );
 
   const modelOptions = useMemo(
@@ -989,6 +1006,7 @@ export function MonitoringCenterPage() {
       return (
         <AccountOverviewPanelActions
           mode={accountOverviewMode}
+          accountDisplayMode={accountDisplayMode}
           searchInput={searchInput}
           accountSort={accountSort}
           accountSortOptions={accountSortOptions}
@@ -998,6 +1016,7 @@ export function MonitoringCenterPage() {
           onRefreshAll={refreshAll}
           onAccountSortKeyChange={handleAccountSortKeyChange}
           onModeChange={setAccountOverviewMode}
+          onAccountDisplayModeChange={setAccountDisplayMode}
         />
       );
     }
@@ -1011,12 +1030,15 @@ export function MonitoringCenterPage() {
         rowCount={realtimeLogRows.length}
         scopedFailureCount={scopedFailureCount}
         failedOnlyActive={failedOnlyActive}
+        accountDisplayMode={accountDisplayMode}
         t={t}
         onToggleFailedOnly={toggleFailedOnly}
+        onAccountDisplayModeChange={setAccountDisplayMode}
       />
     );
   }, [
     accountOverviewMode,
+    accountDisplayMode,
     accountSort,
     accountSortOptions,
     activeDataTab,
@@ -1248,6 +1270,7 @@ export function MonitoringCenterPage() {
               <AccountOverviewPanel
                 embedded
                 mode={accountOverviewMode}
+                accountDisplayMode={accountDisplayMode}
                 searchInput={searchInput}
                 columns={accountOverviewColumns}
                 rows={sortedAccountRows}
@@ -1273,6 +1296,7 @@ export function MonitoringCenterPage() {
                 onRefreshAll={refreshAll}
                 onAccountSortKeyChange={handleAccountSortKeyChange}
                 onModeChange={setAccountOverviewMode}
+                onAccountDisplayModeChange={setAccountDisplayMode}
                 onAccountSort={handleAccountSort}
                 onAccountStatusToggle={handleAccountStatusToggle}
                 onLoadAccountQuota={loadAccountQuota}
@@ -1319,10 +1343,12 @@ export function MonitoringCenterPage() {
               eventsLoadedCount={eventsLoadedCount}
               overallLoading={overallLoading}
               hasPrices={hasPrices}
+              accountDisplayMode={accountDisplayMode}
               locale={i18n.language}
               emptyState={renderMonitoringEmptyState()}
               t={t}
               onToggleFailedOnly={toggleFailedOnly}
+              onAccountDisplayModeChange={setAccountDisplayMode}
               onPageChange={setRealtimePage}
               onPageSizeChange={handleRealtimePageSizeChange}
               onLoadMoreEvents={loadMoreEvents}
