@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/apikeyalias"
@@ -42,10 +43,15 @@ type ModelStat = usageevent.ModelStat
 type RecentFailure = usageevent.RecentFailure
 type AnalyticsFilter = usageevent.AnalyticsFilter
 type TimelinePoint = usageevent.TimelinePoint
+type LatencyPercentiles = usageevent.LatencyPercentiles
+type LatencySummary = usageevent.LatencySummary
 type HourlyPoint = usageevent.HourlyPoint
+type FilterOptionValues = usageevent.FilterOptionValues
+type HeatmapPoint = usageevent.HeatmapPoint
 type ChannelModelStat = usageevent.ChannelModelStat
 type FailureSourceStat = usageevent.FailureSourceStat
 type AccountModelStat = usageevent.AccountModelStat
+type CredentialModelStat = usageevent.CredentialModelStat
 type APIKeyModelStat = usageevent.APIKeyModelStat
 type TaskBucket = usageevent.TaskBucket
 type EventPageItem = usageevent.EventPageItem
@@ -253,12 +259,28 @@ func (s *Store) ModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter
 	return s.UsageEvents.ModelStatsWithFilter(ctx, filter, limit)
 }
 
-func (s *Store) TimelineWithFilter(ctx context.Context, filter AnalyticsFilter, granularity string) ([]TimelinePoint, error) {
-	return s.UsageEvents.TimelineWithFilter(ctx, filter, granularity)
+func (s *Store) TimelineWithFilter(ctx context.Context, filter AnalyticsFilter, granularity string, location *time.Location) ([]TimelinePoint, error) {
+	return s.UsageEvents.TimelineWithFilter(ctx, filter, granularity, location)
+}
+
+func (s *Store) LatencyPercentilesWithFilter(ctx context.Context, filter AnalyticsFilter, granularity string, location *time.Location) ([]LatencyPercentiles, error) {
+	return s.UsageEvents.LatencyPercentilesWithFilter(ctx, filter, granularity, location)
+}
+
+func (s *Store) LatencySummaryWithFilter(ctx context.Context, filter AnalyticsFilter) (LatencySummary, error) {
+	return s.UsageEvents.LatencySummaryWithFilter(ctx, filter)
 }
 
 func (s *Store) HourlyDistributionWithFilter(ctx context.Context, filter AnalyticsFilter) ([]HourlyPoint, error) {
 	return s.UsageEvents.HourlyDistributionWithFilter(ctx, filter)
+}
+
+func (s *Store) FilterOptionValuesWithFilter(ctx context.Context, filter AnalyticsFilter) (FilterOptionValues, error) {
+	return s.UsageEvents.FilterOptionValuesWithFilter(ctx, filter)
+}
+
+func (s *Store) HeatmapWithFilter(ctx context.Context, filter AnalyticsFilter, location *time.Location) ([]HeatmapPoint, error) {
+	return s.UsageEvents.HeatmapWithFilter(ctx, filter, location)
 }
 
 func (s *Store) ChannelModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter) ([]ChannelModelStat, error) {
@@ -271,6 +293,10 @@ func (s *Store) FailureSourcesWithFilter(ctx context.Context, filter AnalyticsFi
 
 func (s *Store) AccountModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter) ([]AccountModelStat, error) {
 	return s.UsageEvents.AccountModelStatsWithFilter(ctx, filter)
+}
+
+func (s *Store) CredentialModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter) ([]CredentialModelStat, error) {
+	return s.UsageEvents.CredentialModelStatsWithFilter(ctx, filter)
 }
 
 func (s *Store) APIKeyModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter) ([]APIKeyModelStat, error) {

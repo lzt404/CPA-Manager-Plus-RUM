@@ -68,6 +68,21 @@ func TestAnalyticsBuildsIncludedSections(t *testing.T) {
 	if len(resp.Timeline) == 0 || len(resp.HourlyDistribution) == 0 {
 		t.Fatalf("timeline = %#v hourly = %#v", resp.Timeline, resp.HourlyDistribution)
 	}
+	if len(resp.Timeline) != 1 {
+		t.Fatalf("timeline buckets = %#v", resp.Timeline)
+	}
+	timelinePoint := resp.Timeline[0]
+	if timelinePoint.Calls != 2 || timelinePoint.Success != 1 || timelinePoint.Failure != 1 ||
+		timelinePoint.InputTokens != 1_000_010 || timelinePoint.OutputTokens != 500_020 ||
+		timelinePoint.CachedTokens != 100 || timelinePoint.TotalTokens != 1_500_130 {
+		t.Fatalf("timeline metrics = %#v", timelinePoint)
+	}
+	if timelinePoint.AvgLatencyMS == nil || math.Abs(*timelinePoint.AvgLatencyMS-250) > 0.000001 {
+		t.Fatalf("timeline latency = %#v", timelinePoint.AvgLatencyMS)
+	}
+	if math.Abs(timelinePoint.Cost-1.99995) > 0.000001 {
+		t.Fatalf("timeline cost = %v", timelinePoint.Cost)
+	}
 	if len(resp.ModelStats) != 2 || len(resp.ModelShare) != 2 {
 		t.Fatalf("model stats/share = %#v %#v", resp.ModelStats, resp.ModelShare)
 	}
@@ -267,6 +282,7 @@ func TestAnalyticsUsesResolvedModelPricingInAggregates(t *testing.T) {
 			ModelShare:   true,
 			ModelStats:   true,
 			ChannelShare: true,
+			Timeline:     true,
 		},
 	})
 	if err != nil {
@@ -287,6 +303,9 @@ func TestAnalyticsUsesResolvedModelPricingInAggregates(t *testing.T) {
 	if len(resp.ChannelShare) != 1 || resp.ChannelShare[0].AuthIndex != "auth-1" ||
 		math.Abs(resp.ChannelShare[0].Cost-3) > 0.000001 {
 		t.Fatalf("channel share = %#v", resp.ChannelShare)
+	}
+	if len(resp.Timeline) != 1 || math.Abs(resp.Timeline[0].Cost-3) > 0.000001 {
+		t.Fatalf("timeline = %#v", resp.Timeline)
 	}
 	if resp.ChannelShare[0].Source != "user@example.com" ||
 		resp.ChannelShare[0].AccountSnapshot != "user@example.com" {
@@ -868,6 +887,53 @@ func TestAnalyticsEventsPageStableCursorAvoidsSkippingSameTimestamp(t *testing.T
 	}
 	if len(seen) != total {
 		t.Fatalf("collected %d unique events, want %d (same-timestamp rows were skipped)", len(seen), total)
+	}
+}
+
+func TestAnalyticsTimelineUsesRequestedTimeZoneForDayBuckets(t *testing.T) {
+	db := newMonitoringTestStore(t)
+	ctx := context.Background()
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	beforeLocalMidnightMS := time.Date(2026, 6, 3, 15, 30, 0, 0, time.UTC).UnixMilli()
+	afterLocalMidnightMS := time.Date(2026, 6, 3, 16, 30, 0, 0, time.UTC).UnixMilli()
+	fromMS := time.Date(2026, 6, 3, 14, 0, 0, 0, time.UTC).UnixMilli()
+	toMS := time.Date(2026, 6, 3, 18, 0, 0, 0, time.UTC).UnixMilli()
+
+	if _, err := db.InsertEvents(ctx, []usage.Event{
+		monitoringEvent("local-day-a", beforeLocalMidnightMS, "gpt-a", "auth-1", "source-a", false, 10, 5, 0, 0, 15, nil),
+		monitoringEvent("local-day-b", afterLocalMidnightMS, "gpt-a", "auth-1", "source-a", false, 20, 10, 0, 0, 30, nil),
+	}); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	resp, err := New(db).Analytics(ctx, Request{
+		FromMS:   fromMS,
+		ToMS:     toMS,
+		TimeZone: "Asia/Shanghai",
+		Include: Include{
+			Timeline:    true,
+			Granularity: "day",
+		},
+	})
+	if err != nil {
+		t.Fatalf("analytics: %v", err)
+	}
+
+	if len(resp.Timeline) != 2 {
+		t.Fatalf("timeline buckets = %#v", resp.Timeline)
+	}
+	expectedFirstBucket := time.Date(2026, 6, 3, 0, 0, 0, 0, location).UnixMilli()
+	expectedSecondBucket := time.Date(2026, 6, 4, 0, 0, 0, 0, location).UnixMilli()
+	if resp.Timeline[0].BucketMS != expectedFirstBucket || resp.Timeline[0].Label != "06/03" ||
+		resp.Timeline[0].Calls != 1 || resp.Timeline[0].TotalTokens != 15 {
+		t.Fatalf("first timeline bucket = %#v", resp.Timeline[0])
+	}
+	if resp.Timeline[1].BucketMS != expectedSecondBucket || resp.Timeline[1].Label != "06/04" ||
+		resp.Timeline[1].Calls != 1 || resp.Timeline[1].TotalTokens != 30 {
+		t.Fatalf("second timeline bucket = %#v", resp.Timeline[1])
 	}
 }
 
