@@ -90,7 +90,7 @@ jobs:
         id: release_type
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+          if [[ "${GITHUB_REF_NAME}" =~ -(alpha|beta|rc) ]]; then
             echo "prerelease=true" >> "${GITHUB_OUTPUT}"
           else
             echo "prerelease=false" >> "${GITHUB_OUTPUT}"
