@@ -2300,8 +2300,26 @@
         "alias_error_empty": "Введите псевдоним",
         "alias_error_too_long": "Псевдоним должен быть не длиннее 120 символов",
         "alias_error_duplicate": "Псевдоним уже существует. Используйте уникальный псевдоним.",
+        "access_action": "Доступ",
+        "access_title": "Доступные учётные данные/API",
+        "access_hint": "Добавьте доступные учётные данные/API через список выше. Если список пуст, этот API-ключ не сможет использовать учётные данные или upstream API-ключи.",
+        "auth_index_select": "Доступные учётные данные",
+        "auth_index_select_placeholder": "Выберите auth_index",
+        "auth_index_add": "Добавить в allowlist",
+        "auth_index_add_unused": "Добавить все не выбранные другими ключами",
+        "auth_index_add_all": "Добавить все учётные данные и API-провайдеры",
+        "auth_index_search_placeholder": "Поиск учётных данных",
+        "auth_index_search_empty": "Нет подходящих учётных данных",
+        "auth_index_empty": "Учётные данные с auth_index не найдены.",
+        "auth_id_hint": "Внутренние auth ID сохранены для совместимости с существующей конфигурацией.",
         "error_empty": "Введите API-ключ",
         "error_invalid": "API-ключ содержит недопустимые символы"
+      },
+      "api_key_access_rules": {
+        "status_allowed": "Разрешено элементов учётных данных/API: {{count}}",
+        "status_denied": "Учётные данные/API не разрешены",
+        "allowed_indexes": "Разрешённые auth_index",
+        "allowed_ids": "Разрешённые внутренние auth ID"
       },
       "payload_rules": {
         "rule": "Правило",

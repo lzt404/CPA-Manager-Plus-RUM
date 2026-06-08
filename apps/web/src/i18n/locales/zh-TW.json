@@ -2276,8 +2276,26 @@
         "alias_error_empty": "請輸入別名",
         "alias_error_too_long": "別名不能超過 120 個字元",
         "alias_error_duplicate": "別名已存在，請換一個唯一別名",
+        "access_action": "存取設定",
+        "access_title": "設定可存取憑證/API",
+        "access_hint": "透過上方選擇框新增允許存取的憑證/API；留空表示此 API Key 無法存取任何憑證或上游 API Key。",
+        "auth_index_select": "可選憑證",
+        "auth_index_select_placeholder": "選擇憑證 auth_index",
+        "auth_index_add": "新增到允許清單",
+        "auth_index_add_unused": "新增全部未被其他金鑰選擇的憑證",
+        "auth_index_add_all": "一鍵新增所有憑證和 API 供應商",
+        "auth_index_search_placeholder": "搜尋憑證",
+        "auth_index_search_empty": "沒有符合的憑證",
+        "auth_index_empty": "未找到帶 auth_index 的憑證。",
+        "auth_id_hint": "內部 auth ID 會保留，用於相容既有設定。",
         "error_empty": "請輸入 API 金鑰",
         "error_invalid": "API 金鑰包含無效字元"
+      },
+      "api_key_access_rules": {
+        "status_allowed": "允許 {{count}} 個憑證/API 項",
+        "status_denied": "未允許任何憑證/API",
+        "allowed_indexes": "允許的 auth_index",
+        "allowed_ids": "允許的內部 auth ID"
       },
       "payload_rules": {
         "rule": "規則",

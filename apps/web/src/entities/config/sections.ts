@@ -12,6 +12,7 @@ export const CONFIG_SECTION_KEYS: RawConfigSection[] = [
   'force-model-prefix',
   'routing/strategy',
   'api-keys',
+  'api-key-access-rules',
   'ampcode',
   'gemini-api-key',
   'codex-api-key',
@@ -21,10 +22,7 @@ export const CONFIG_SECTION_KEYS: RawConfigSection[] = [
   'oauth-excluded-models',
 ];
 
-export const extractConfigSectionValue = (
-  config: Config | null,
-  section?: RawConfigSection
-) => {
+export const extractConfigSectionValue = (config: Config | null, section?: RawConfigSection) => {
   if (!config) return undefined;
   switch (section) {
     case 'debug':
@@ -49,6 +47,8 @@ export const extractConfigSectionValue = (
       return config.routingStrategy;
     case 'api-keys':
       return config.apiKeys;
+    case 'api-key-access-rules':
+      return config.apiKeyAccessRules;
     case 'ampcode':
       return config.ampcode;
     case 'gemini-api-key':

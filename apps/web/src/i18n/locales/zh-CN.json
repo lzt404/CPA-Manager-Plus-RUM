@@ -2251,8 +2251,26 @@
         "alias_error_empty": "请输入别名",
         "alias_error_too_long": "别名不能超过 120 个字符",
         "alias_error_duplicate": "别名已存在，请换一个唯一别名",
+        "access_action": "访问设置",
+        "access_title": "设置可访问凭证/API",
+        "access_hint": "通过上面的选择框添加允许访问的凭证/API；留空表示该 API Key 无法访问任何凭证或上游 API Key。",
+        "auth_index_select": "可选凭证",
+        "auth_index_select_placeholder": "选择凭证 auth_index",
+        "auth_index_add": "添加到允许列表",
+        "auth_index_add_unused": "添加全部未被其他密钥选择的凭证",
+        "auth_index_add_all": "一键添加所有凭证和 API 提供商",
+        "auth_index_search_placeholder": "搜索凭证",
+        "auth_index_search_empty": "没有匹配的凭证",
+        "auth_index_empty": "未找到带 auth_index 的凭证。",
+        "auth_id_hint": "内部 auth ID 会保留，用于兼容已有配置。",
         "error_empty": "请输入 API 密钥",
         "error_invalid": "API 密钥包含无效字符"
+      },
+      "api_key_access_rules": {
+        "status_allowed": "允许 {{count}} 个凭证/API 项",
+        "status_denied": "未允许任何凭证/API",
+        "allowed_indexes": "允许的 auth_index",
+        "allowed_ids": "允许的内部 auth ID"
       },
       "payload_rules": {
         "rule": "规则",

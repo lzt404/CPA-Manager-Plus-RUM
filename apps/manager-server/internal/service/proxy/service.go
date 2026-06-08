@@ -116,6 +116,7 @@ var exactCPAProxyPaths = map[string]struct{}{
 	"/ampcode":                             {},
 	"/api-call":                            {},
 	"/api-key-usage":                       {},
+	"/api-key-access-rules":                {},
 	"/api-keys":                            {},
 	"/anthropic-auth-url":                  {},
 	"/antigravity-auth-url":                {},

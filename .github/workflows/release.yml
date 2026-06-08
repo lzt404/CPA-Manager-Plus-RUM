@@ -97,14 +97,16 @@ jobs:
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          name: ${{ github.ref_name }}
           files: |
             apps/web/dist/management.html
             dist/native/*
           body_path: release-notes.md
           draft: false
           prerelease: ${{ steps.release_type.outputs.prerelease }}
+          make_latest: ${{ steps.release_type.outputs.prerelease == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -116,8 +118,8 @@ jobs:
       packages: write
 
     env:
-      DOCKERHUB_IMAGE: seakee/cpa-manager-plus
-      GHCR_IMAGE: ghcr.io/seakee/cpa-manager-plus
+      DOCKERHUB_IMAGE: lzt404/cpa-manager-plus-rum
+      GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/cpa-manager-plus-rum
 
     steps:
       - name: Checkout code
@@ -149,10 +151,6 @@ jobs:
         id: docker_targets
         run: |
           set -euo pipefail
-          if [ "${DOCKERHUB_IMAGE}" != "seakee/cpa-manager-plus" ]; then
-            echo "Docker image name must be seakee/cpa-manager-plus" >&2
-            exit 1
-          fi
 
           images="${GHCR_IMAGE}"
           dockerhub_enabled=false
@@ -161,11 +159,6 @@ jobs:
             dockerhub_enabled=true
           else
             echo "::warning::DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are not both configured; DockerHub publish will be skipped."
-          fi
-
-          if [ "${dockerhub_enabled}" = "true" ] && [ "${DOCKERHUB_IMAGE}" != "seakee/cpa-manager-plus" ]; then
-            echo "DockerHub image name must be seakee/cpa-manager-plus" >&2
-            exit 1
           fi
 
           {
@@ -203,8 +196,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},enable=${{ steps.release_type.outputs.stable == 'true' }}
             type=raw,value=latest,enable=${{ steps.release_type.outputs.stable == 'true' }}
           labels: |
-            org.opencontainers.image.title=CPA Manager Plus
-            org.opencontainers.image.description=CPA Manager Plus Manager Server container image
+            org.opencontainers.image.title=CPA Manager Plus RUM
+            org.opencontainers.image.description=CPA Manager Plus RUM Manager Server container image
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}#readme
@@ -228,5 +221,5 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.DOCKERHUB_IMAGE }}
-          short-description: CPA Manager Plus with Dockerized Manager Server
+          short-description: CPA Manager Plus RUM with Dockerized Manager Server
           readme-filepath: ./README.md

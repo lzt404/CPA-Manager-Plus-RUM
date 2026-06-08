@@ -2304,8 +2304,26 @@
         "alias_error_empty": "Please enter an alias",
         "alias_error_too_long": "Alias must be 120 characters or less",
         "alias_error_duplicate": "Alias already exists. Use a unique alias.",
+        "access_action": "Access",
+        "access_title": "Set Accessible Credentials/APIs",
+        "access_hint": "Use the picker above to add accessible credentials/APIs. Leaving this empty means this API key cannot access any credential or upstream API key.",
+        "auth_index_select": "Available Credentials",
+        "auth_index_select_placeholder": "Select credential auth_index",
+        "auth_index_add": "Add to Allow List",
+        "auth_index_add_unused": "Add all credentials not selected by other keys",
+        "auth_index_add_all": "Add all credentials and API providers",
+        "auth_index_search_placeholder": "Search credentials",
+        "auth_index_search_empty": "No matching credentials",
+        "auth_index_empty": "No credentials with auth_index were found.",
+        "auth_id_hint": "Internal auth IDs are kept for compatibility with existing config.",
         "error_empty": "Please enter an API key",
         "error_invalid": "API key contains invalid characters"
+      },
+      "api_key_access_rules": {
+        "status_allowed": "Allows {{count}} credential/API items",
+        "status_denied": "No credentials/APIs allowed",
+        "allowed_indexes": "Allowed auth_index",
+        "allowed_ids": "Allowed internal auth ID"
       },
       "payload_rules": {
         "rule": "Rule",

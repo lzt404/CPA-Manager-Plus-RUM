@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useReducer } from 'react';
 import { isMap, parse as parseYaml, parseDocument } from 'yaml';
 import type {
+  ApiKeyAccessRule,
   DisableImageGenerationMode,
   VisualConfigValues,
   VisualConfigValidationErrors,
@@ -60,21 +61,189 @@ function parseApiKeysText(raw: unknown): string {
   return keys.join('\n');
 }
 
-function resolveApiKeysText(parsed: Record<string, unknown>): string {
-  if (Object.prototype.hasOwnProperty.call(parsed, 'api-keys')) {
-    return parseApiKeysText(parsed['api-keys']);
-  }
-
+function resolveConfigApiKeyProvider(
+  parsed: Record<string, unknown>
+): Record<string, unknown> | null {
   const auth = asRecord(parsed.auth);
   const providers = asRecord(auth?.providers);
-  const configApiKeyProvider = asRecord(providers?.['config-api-key']);
-  if (!configApiKeyProvider) return '';
+  return asRecord(providers?.['config-api-key']);
+}
 
-  if (Object.prototype.hasOwnProperty.call(configApiKeyProvider, 'api-key-entries')) {
-    return parseApiKeysText(configApiKeyProvider['api-key-entries']);
+function resolveApiKeyEntryLists(parsed: Record<string, unknown>): unknown[] {
+  const lists: unknown[] = [];
+  if (Object.prototype.hasOwnProperty.call(parsed, 'api-keys')) {
+    lists.push(parsed['api-keys']);
   }
 
-  return parseApiKeysText(configApiKeyProvider['api-keys']);
+  const configApiKeyProvider = resolveConfigApiKeyProvider(parsed);
+  if (!configApiKeyProvider) return lists;
+
+  if (Object.prototype.hasOwnProperty.call(configApiKeyProvider, 'api-key-entries')) {
+    lists.push(configApiKeyProvider['api-key-entries']);
+  } else if (Object.prototype.hasOwnProperty.call(configApiKeyProvider, 'api-keys')) {
+    lists.push(configApiKeyProvider['api-keys']);
+  }
+
+  return lists;
+}
+
+function resolveApiKeysText(parsed: Record<string, unknown>): string {
+  const [primaryList] = resolveApiKeyEntryLists(parsed);
+  return parseApiKeysText(primaryList);
+}
+
+function splitAccessRuleListText(value: string): string[] {
+  const items = value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item)) return false;
+    seen.add(item);
+    return true;
+  });
+}
+
+function parseAccessRuleStringList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return splitAccessRuleListText(raw.map((item) => String(item ?? '')).join('\n'));
+  }
+  if (typeof raw === 'string') {
+    return splitAccessRuleListText(raw);
+  }
+  return [];
+}
+
+function parseApiKeyAccessRules(raw: unknown): ApiKeyAccessRule[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((rule, index) => {
+      const record = asRecord(rule);
+      if (!record) return null;
+      const apiKey =
+        extractApiKeyValue(record['api-key']) ??
+        extractApiKeyValue(record.apiKey) ??
+        extractApiKeyValue(record.key) ??
+        '';
+      if (!apiKey) return null;
+      const allowedAuthIndexes = parseAccessRuleStringList(
+        record['allowed-auth-indexes'] ?? record.allowedAuthIndexes ?? record.allowed_auth_indexes
+      );
+      const allowedAuthIds = parseAccessRuleStringList(
+        record['allowed-auth-ids'] ??
+          record.allowedAuthIds ??
+          record.allowedAuthIDs ??
+          record.allowed_auth_ids
+      );
+
+      return {
+        id: `api-key-access-rule-${index}`,
+        apiKey,
+        allowedAuthIndexesText: allowedAuthIndexes.join('\n'),
+        allowedAuthIdsText: allowedAuthIds.join('\n'),
+      };
+    })
+    .filter((rule): rule is ApiKeyAccessRule => Boolean(rule));
+}
+
+function parseApiKeyAccessRulesFromApiKeyEntries(raw: unknown): ApiKeyAccessRule[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item, index) => {
+      const record = asRecord(item);
+      if (!record) return null;
+      const apiKey = extractApiKeyValue(record);
+      if (!apiKey) return null;
+      const allowedAuthIndexes = parseAccessRuleStringList(
+        record['allowed-auth-indexes'] ?? record.allowedAuthIndexes ?? record.allowed_auth_indexes
+      );
+      const allowedAuthIds = parseAccessRuleStringList(
+        record['allowed-auth-ids'] ??
+          record.allowedAuthIds ??
+          record.allowedAuthIDs ??
+          record.allowed_auth_ids
+      );
+
+      return {
+        id: `api-key-inline-access-rule-${index}`,
+        apiKey,
+        allowedAuthIndexesText: allowedAuthIndexes.join('\n'),
+        allowedAuthIdsText: allowedAuthIds.join('\n'),
+      };
+    })
+    .filter((rule): rule is ApiKeyAccessRule => Boolean(rule));
+}
+
+function mergeApiKeyAccessRules(
+  baseRules: ApiKeyAccessRule[],
+  overrideRules: ApiKeyAccessRule[]
+): ApiKeyAccessRule[] {
+  const merged = [...baseRules];
+  const indexByKey = new Map<string, number>();
+  merged.forEach((rule, index) => {
+    const key = rule.apiKey.trim();
+    if (key && !indexByKey.has(key)) indexByKey.set(key, index);
+  });
+
+  overrideRules.forEach((rule) => {
+    const key = rule.apiKey.trim();
+    if (!key) return;
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      merged[existingIndex] = rule;
+      return;
+    }
+    indexByKey.set(key, merged.length);
+    merged.push(rule);
+  });
+
+  return merged;
+}
+
+function buildApiKeyAccessRules(parsed: Record<string, unknown>, apiKeysText: string) {
+  const legacyRules = parseApiKeyAccessRules(
+    parsed['api-key-access-rules'] ?? parsed.apiKeyAccessRules
+  );
+  const inlineRules = resolveApiKeyEntryLists(parsed).flatMap(
+    parseApiKeyAccessRulesFromApiKeyEntries
+  );
+  const merged = mergeApiKeyAccessRules(legacyRules, inlineRules);
+  const ruleByKey = new Map(merged.map((rule) => [rule.apiKey.trim(), rule]));
+  return apiKeysText
+    .split('\n')
+    .map((key) => key.trim())
+    .filter(Boolean)
+    .map(
+      (key, index) =>
+        ruleByKey.get(key) ?? {
+          id: `api-key-access-rule-${index}`,
+          apiKey: key,
+          allowedAuthIndexesText: '',
+          allowedAuthIdsText: '',
+        }
+    );
+}
+
+function areApiKeyAccessRulesEqual(left: ApiKeyAccessRule[], right: ApiKeyAccessRule[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    const a = left[i];
+    const b = right[i];
+    if (!a || !b) return false;
+    if (
+      a.id !== b.id ||
+      a.apiKey !== b.apiKey ||
+      a.allowedAuthIndexesText !== b.allowedAuthIndexesText ||
+      a.allowedAuthIdsText !== b.allowedAuthIdsText
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 type YamlDocument = ReturnType<typeof parseDocument>;
@@ -183,9 +352,7 @@ function getPortError(value: string): 'port_range' | undefined {
   return parsed >= 1 && parsed <= 65535 ? undefined : 'port_range';
 }
 
-function getRedisUsageQueueRetentionError(
-  value: string
-): 'retention_seconds_range' | undefined {
+function getRedisUsageQueueRetentionError(value: string): 'retention_seconds_range' | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   if (!/^\d+$/.test(trimmed)) return 'retention_seconds_range';
@@ -235,6 +402,40 @@ function deleteLegacyApiKeysProvider(doc: YamlDocument): void {
   deleteIfMapEmpty(doc, ['auth', 'providers', 'config-api-key']);
   deleteIfMapEmpty(doc, ['auth', 'providers']);
   deleteIfMapEmpty(doc, ['auth']);
+}
+
+function serializeApiKeyAccessRulesForYaml(
+  rules: ApiKeyAccessRule[]
+): Array<Record<string, unknown>> {
+  return rules
+    .map((rule) => {
+      const apiKey = rule.apiKey.trim();
+      if (!apiKey) return null;
+
+      const serialized: Record<string, unknown> = { 'api-key': apiKey };
+      const allowedAuthIndexes = splitAccessRuleListText(rule.allowedAuthIndexesText);
+      const allowedAuthIds = splitAccessRuleListText(rule.allowedAuthIdsText);
+      if (allowedAuthIndexes.length > 0) {
+        serialized['allowed-auth-indexes'] = allowedAuthIndexes;
+      }
+      if (allowedAuthIds.length > 0) {
+        serialized['allowed-auth-ids'] = allowedAuthIds;
+      }
+      return serialized;
+    })
+    .filter((rule): rule is Record<string, unknown> => Boolean(rule));
+}
+
+function serializeApiKeysForYaml(
+  apiKeys: string[],
+  rules: ApiKeyAccessRule[]
+): Array<string | Record<string, unknown>> {
+  if (apiKeys.length === 0) return [];
+  const serializedRules = serializeApiKeyAccessRulesForYaml(rules);
+  const ruleByKey = new Map(serializedRules.map((rule) => [String(rule['api-key'] ?? ''), rule]));
+  if (ruleByKey.size === 0) return apiKeys;
+
+  return apiKeys.map((key) => ruleByKey.get(key) ?? { 'api-key': key });
 }
 
 function deepClone<T>(value: T): T {
@@ -364,6 +565,12 @@ function getNextDirtyFields(
   if (Object.prototype.hasOwnProperty.call(patch, 'apiKeysText')) {
     updateDirty('apiKeysText', nextValues.apiKeysText === baselineValues.apiKeysText);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'apiKeyAccessRules')) {
+    updateDirty(
+      'apiKeyAccessRules',
+      areApiKeyAccessRulesEqual(nextValues.apiKeyAccessRules, baselineValues.apiKeyAccessRules)
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'debug')) {
     updateDirty('debug', nextValues.debug === baselineValues.debug);
   }
@@ -388,8 +595,7 @@ function getNextDirtyFields(
   if (Object.prototype.hasOwnProperty.call(patch, 'redisUsageQueueRetentionSeconds')) {
     updateDirty(
       'redisUsageQueueRetentionSeconds',
-      nextValues.redisUsageQueueRetentionSeconds ===
-        baselineValues.redisUsageQueueRetentionSeconds
+      nextValues.redisUsageQueueRetentionSeconds === baselineValues.redisUsageQueueRetentionSeconds
     );
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'proxyUrl')) {
@@ -592,6 +798,7 @@ export function useVisualConfig() {
       const claudeHeaderDefaults = asRecord(parsed['claude-header-defaults']);
       const codexHeaderDefaults = asRecord(parsed['codex-header-defaults']);
       const codex = asRecord(parsed.codex);
+      const apiKeysText = resolveApiKeysText(parsed);
 
       const newValues: VisualConfigValues = {
         host: typeof parsed.host === 'string' ? parsed.host : '',
@@ -616,7 +823,8 @@ export function useVisualConfig() {
               : '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
-        apiKeysText: resolveApiKeysText(parsed),
+        apiKeysText,
+        apiKeyAccessRules: buildApiKeyAccessRules(parsed, apiKeysText),
 
         debug: Boolean(parsed.debug),
         commercialMode: Boolean(parsed['commercial-mode']),
@@ -683,9 +891,7 @@ export function useVisualConfig() {
 
         routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
         routingSessionAffinity: Boolean(
-          routing?.['session-affinity'] ??
-            routing?.sessionAffinity ??
-            routing?.['sessionAffinity']
+          routing?.['session-affinity'] ?? routing?.sessionAffinity ?? routing?.['sessionAffinity']
         ),
         routingSessionAffinityTTL:
           typeof routing?.['session-affinity-ttl'] === 'string'
@@ -778,11 +984,14 @@ export function useVisualConfig() {
           .map((key) => key.trim())
           .filter(Boolean);
         if (apiKeys.length > 0) {
-          doc.setIn(['api-keys'], apiKeys);
+          doc.setIn(['api-keys'], serializeApiKeysForYaml(apiKeys, values.apiKeyAccessRules));
         } else if (docHas(doc, ['api-keys'])) {
           doc.deleteIn(['api-keys']);
         }
         deleteLegacyApiKeysProvider(doc);
+        if (docHas(doc, ['api-key-access-rules'])) {
+          doc.deleteIn(['api-key-access-rules']);
+        }
 
         setBooleanInDoc(doc, ['debug'], values.debug);
 
@@ -932,10 +1141,7 @@ export function useVisualConfig() {
           doc.setIn(['quota-exceeded', 'switch-project'], values.quotaSwitchProject);
           doc.setIn(['quota-exceeded', 'switch-preview-model'], values.quotaSwitchPreviewModel);
           if (writeQuotaAntigravityCredits) {
-            doc.setIn(
-              ['quota-exceeded', 'antigravity-credits'],
-              values.quotaAntigravityCredits
-            );
+            doc.setIn(['quota-exceeded', 'antigravity-credits'], values.quotaAntigravityCredits);
           }
           deleteIfMapEmpty(doc, ['quota-exceeded']);
         }

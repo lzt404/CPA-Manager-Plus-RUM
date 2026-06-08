@@ -5,6 +5,7 @@ import type { Config } from '@/types/config';
 describe('config sections', () => {
   it('contains the cacheable section keys used by the config store', () => {
     expect(CONFIG_SECTION_KEYS).toContain('api-keys');
+    expect(CONFIG_SECTION_KEYS).toContain('api-key-access-rules');
     expect(CONFIG_SECTION_KEYS).toContain('openai-compatibility');
     expect(CONFIG_SECTION_KEYS).toContain('oauth-excluded-models');
   });

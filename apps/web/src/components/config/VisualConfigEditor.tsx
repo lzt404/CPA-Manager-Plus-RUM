@@ -238,6 +238,10 @@ export function VisualConfigEditor({
     (apiKeysText: string) => onChange({ apiKeysText }),
     [onChange]
   );
+  const handleApiKeyAccessRulesChange = useCallback(
+    (apiKeyAccessRules: VisualConfigValues['apiKeyAccessRules']) => onChange({ apiKeyAccessRules }),
+    [onChange]
+  );
   const handlePayloadDefaultRulesChange = useCallback(
     (payloadDefaultRules: PayloadRule[]) => onChange({ payloadDefaultRules }),
     [onChange]
@@ -454,7 +458,8 @@ export function VisualConfigEditor({
         220
       );
       const maxHeight = Math.max(window.innerHeight - top - viewportPadding, 160);
-      const isVisible = workspaceRect.bottom > stickyTop + 24 && anchorRect.top < window.innerHeight;
+      const isVisible =
+        workspaceRect.bottom > stickyTop + 24 && anchorRect.top < window.innerHeight;
 
       floatingElement.style.transform = `translate3d(${left}px, ${top}px, 0)`;
       floatingElement.style.width = `${width}px`;
@@ -724,8 +729,10 @@ export function VisualConfigEditor({
               <div className={styles.subsection}>
                 <ApiKeysCardEditor
                   value={values.apiKeysText}
+                  accessRules={values.apiKeyAccessRules}
                   disabled={disabled}
                   onChange={handleApiKeysTextChange}
+                  onAccessRulesChange={handleApiKeyAccessRulesChange}
                 />
               </div>
             </SectionStack>
@@ -822,9 +829,7 @@ export function VisualConfigEditor({
                   max="3600"
                   placeholder="60"
                   value={values.redisUsageQueueRetentionSeconds}
-                  onChange={(e) =>
-                    onChange({ redisUsageQueueRetentionSeconds: e.target.value })
-                  }
+                  onChange={(e) => onChange({ redisUsageQueueRetentionSeconds: e.target.value })}
                   disabled={disabled}
                   hint={t(
                     'config_management.visual.sections.system.redis_usage_queue_retention_hint'
@@ -1041,17 +1046,13 @@ export function VisualConfigEditor({
                       <Input
                         label={t('config_management.visual.sections.headers.package_version')}
                         value={values.claudeHeaderPackageVersion}
-                        onChange={(e) =>
-                          onChange({ claudeHeaderPackageVersion: e.target.value })
-                        }
+                        onChange={(e) => onChange({ claudeHeaderPackageVersion: e.target.value })}
                         disabled={disabled}
                       />
                       <Input
                         label={t('config_management.visual.sections.headers.runtime_version')}
                         value={values.claudeHeaderRuntimeVersion}
-                        onChange={(e) =>
-                          onChange({ claudeHeaderRuntimeVersion: e.target.value })
-                        }
+                        onChange={(e) => onChange({ claudeHeaderRuntimeVersion: e.target.value })}
                         disabled={disabled}
                       />
                       <Input
@@ -1144,9 +1145,7 @@ export function VisualConfigEditor({
               />
               <ToggleRow
                 title={t('config_management.visual.sections.quota.antigravity_credits')}
-                description={t(
-                  'config_management.visual.sections.quota.antigravity_credits_desc'
-                )}
+                description={t('config_management.visual.sections.quota.antigravity_credits_desc')}
                 checked={values.quotaAntigravityCredits}
                 disabled={disabled}
                 onChange={(quotaAntigravityCredits) => onChange({ quotaAntigravityCredits })}

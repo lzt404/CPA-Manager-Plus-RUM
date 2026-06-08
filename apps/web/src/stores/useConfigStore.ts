@@ -94,17 +94,21 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       set({
         config: data,
         cache: newCache,
-        loading: false
+        loading: false,
       });
 
       return section ? extractConfigSectionValue(data, section) : data;
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to fetch config';
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Failed to fetch config';
       if (requestId === configRequestToken) {
         set({
           error: message || 'Failed to fetch config',
-          loading: false
+          loading: false,
         });
       }
       throw error;
@@ -154,6 +158,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           break;
         case 'api-keys':
           nextConfig.apiKeys = value as Config['apiKeys'];
+          break;
+        case 'api-key-access-rules':
+          nextConfig.apiKeyAccessRules = value as Config['apiKeyAccessRules'];
           break;
         case 'ampcode':
           nextConfig.ampcode = value as Config['ampcode'];
@@ -222,5 +229,5 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (!cached) return false;
 
     return Date.now() - cached.timestamp < CACHE_EXPIRY_MS;
-  }
+  },
 }));
