@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
+	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/accountaction"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/apikeyalias"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/codexinspection"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/deadletter"
@@ -35,6 +36,8 @@ type ModelPriceSyncResult = model.ModelPriceSyncResult
 type APIKeyAlias = model.APIKeyAlias
 type QuotaCooldown = model.QuotaCooldown
 type QuotaCooldownUpsert = model.QuotaCooldownUpsert
+type AccountActionCandidate = model.AccountActionCandidate
+type AccountActionCandidateUpsert = model.AccountActionCandidateUpsert
 
 var DefaultCodexInspectionConfig = model.DefaultCodexInspectionConfig
 var NormalizeCodexInspectionConfig = model.NormalizeCodexInspectionConfig
@@ -62,6 +65,7 @@ type Store struct {
 	DeadLetters      deadletter.Repository
 	ModelPrices      modelprice.Repository
 	APIKeyAliases    apikeyalias.Repository
+	AccountActions   accountaction.Repository
 	CodexInspections codexinspection.Repository
 	QuotaCooldowns   quotacooldown.Repository
 }
@@ -82,6 +86,7 @@ func New(db *sql.DB, protector ...*security.Protector) *Store {
 		DeadLetters:      deadletter.New(db),
 		ModelPrices:      modelprice.New(db),
 		APIKeyAliases:    apikeyalias.New(db),
+		AccountActions:   accountaction.New(db),
 		CodexInspections: codexinspection.New(db),
 		QuotaCooldowns:   quotacooldown.New(db),
 	}
@@ -156,6 +161,34 @@ func (s *Store) UpsertAPIKeyAliasesWithActiveHashes(ctx context.Context, aliases
 
 func (s *Store) DeleteAPIKeyAlias(ctx context.Context, apiKeyHash string) error {
 	return s.APIKeyAliases.Delete(ctx, apiKeyHash)
+}
+
+func (s *Store) UpsertAccountActionCandidate(ctx context.Context, input AccountActionCandidateUpsert) (AccountActionCandidate, error) {
+	return s.AccountActions.Upsert(ctx, input)
+}
+
+func (s *Store) ListAccountActionCandidates(ctx context.Context, status string, limit int) ([]AccountActionCandidate, error) {
+	return s.AccountActions.List(ctx, status, limit)
+}
+
+func (s *Store) CountAccountActionCandidates(ctx context.Context, status string) (int64, error) {
+	return s.AccountActions.Count(ctx, status)
+}
+
+func (s *Store) GetAccountActionCandidate(ctx context.Context, id int64) (AccountActionCandidate, bool, error) {
+	return s.AccountActions.Get(ctx, id)
+}
+
+func (s *Store) UpdateAccountActionCandidateStatus(ctx context.Context, id int64, status string) (AccountActionCandidate, error) {
+	return s.AccountActions.UpdateStatus(ctx, id, status)
+}
+
+func (s *Store) UpdatePendingAccountActionCandidateStatus(ctx context.Context, id int64, status string) (AccountActionCandidate, error) {
+	return s.AccountActions.UpdatePendingStatus(ctx, id, status)
+}
+
+func (s *Store) RecordAccountActionCandidateFailure(ctx context.Context, id int64, reason string) error {
+	return s.AccountActions.RecordFailure(ctx, id, reason)
 }
 
 func (s *Store) CreateCodexInspectionRun(ctx context.Context, run CodexInspectionRun) (CodexInspectionRun, error) {
