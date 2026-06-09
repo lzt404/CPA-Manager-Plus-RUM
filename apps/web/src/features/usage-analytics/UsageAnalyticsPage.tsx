@@ -20,22 +20,17 @@ import { Button } from '@/components/ui/Button';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { SegmentedTabs, type SegmentedTabItem } from '@/components/ui/SegmentedTabs';
 import {
-  IconChartLine,
   IconCheck,
   IconCopy,
-  IconDatabaseZap,
-  IconDollarSign,
   IconExternalLink,
   IconEye,
   IconFileText,
-  IconFilter,
   IconInbox,
   IconKey,
   IconModelCluster,
   IconRefreshCw,
   IconSearch,
   IconShield,
-  IconTimer,
   IconTrendingUp,
 } from '@/components/ui/icons';
 import { useThemeStore } from '@/stores';
@@ -43,7 +38,6 @@ import {
   buildUsageHeatmapChartData,
   buildMonitoringDetailUrl,
   buildOptionValues,
-  computeCacheHitRate,
   summarizeAnomalies,
   anomalyMetricLabelKey,
   DEFAULT_SELECTED_METRICS,
@@ -78,21 +72,14 @@ import {
   type UsageTrendMetricKey,
 } from './usageAnalyticsModel';
 import { useUsageAnalytics } from './useUsageAnalytics';
+import { UsageSummarySection } from './components/UsageSummaryCards';
+import {
+  buildUsageEntitySummaryCards,
+  buildUsageHeatmapSummaryCards,
+  buildUsageOverviewSummaryCards,
+  buildUsageTrendSummaryCards,
+} from './usageAnalyticsPresentation';
 import styles from './UsageAnalyticsPage.module.scss';
-
-type SummaryCardConfig = {
-  key: UsageMetricKey;
-  icon: ReactNode;
-  accent: string;
-};
-
-const overviewSummaryCards: SummaryCardConfig[] = [
-  { key: 'requestCount', icon: <IconChartLine size={22} />, accent: 'blue' },
-  { key: 'estimatedCost', icon: <IconDollarSign size={22} />, accent: 'orange' },
-  { key: 'totalTokens', icon: <IconDatabaseZap size={22} />, accent: 'teal' },
-];
-
-const overviewDeltaKeys: UsageMetricKey[] = ['requestCount', 'totalTokens', 'estimatedCost'];
 
 const trendMetricOptions: Array<{ value: UsageTrendMetricKey; labelKey: string }> = [
   { value: 'requestCount', labelKey: 'usage_analytics.trend_metric_requestCount' },
@@ -175,14 +162,6 @@ type UsageChartTheme = {
   tokenStructureColors: string[];
 };
 
-const analysisStatToneColors = {
-  blue: '#2563eb',
-  indigo: '#4f46e5',
-  orange: '#f97316',
-  red: '#dc2626',
-  teal: '#0ea5a7',
-  violet: '#7c3aed',
-} as const;
 const lightUsageChartTheme: UsageChartTheme = {
   axisColors: {
     requests: '#409eff',
@@ -273,7 +252,6 @@ const useUsageChartTheme = () => {
   return getUsageChartTheme(resolvedTheme);
 };
 
-type AnalysisStatTone = keyof typeof analysisStatToneColors;
 const appendHexAlpha = (color: string, alphaHex: string) =>
   /^#[\da-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
 
@@ -346,28 +324,6 @@ const formatMatrixMetricValue = (key: UsageMatrixMetricKey, value: number) => {
 };
 
 const formatQuotaValue = (value: number) => formatMetricValue('estimatedCost', value);
-
-const getMaxTimelinePoint = (
-  timeline: UsageTimelinePoint[],
-  valueOf: (point: UsageTimelinePoint) => number
-) =>
-  timeline.reduce<UsageTimelinePoint | null>((current, point) => {
-    if (!current) return point;
-    return valueOf(point) > valueOf(current) ? point : current;
-  }, null);
-
-const getMaxTimelineMs = (
-  timeline: UsageTimelinePoint[],
-  valueOf: (point: UsageTimelinePoint) => number | null
-) =>
-  timeline.reduce<number | null>((current, point) => {
-    const value = valueOf(point);
-    if (value === null || !Number.isFinite(value)) return current;
-    return current === null || value > current ? value : current;
-  }, null);
-
-const formatTrendDelta = (hasComparison: boolean, value: number) =>
-  hasComparison ? formatDelta(value) : '-';
 
 const mapProviderRowsToRankRows = (rows: UsageProviderRow[]): UsageRankRow[] =>
   rows.map((row) => ({
@@ -1759,12 +1715,6 @@ function ProviderSharePanel({ rows }: { rows: UsageProviderRow[] }) {
           <span>{t('usage_analytics.empty_title')}</span>
         </div>
       ) : (
-  const getOverviewDelta = (key: UsageMetricKey): number | null => {
-    if (!usage.summaryDelta.hasComparison) return null;
-    if (!overviewDeltaKeys.includes(key)) return null;
-    return usage.summaryDelta[key as 'requestCount' | 'totalTokens' | 'estimatedCost'];
-  };
-
         rows.slice(0, 6).map((row, index) => (
           <span key={row.id}>
             <i
@@ -1781,8 +1731,6 @@ function ProviderSharePanel({ rows }: { rows: UsageProviderRow[] }) {
     </div>
   );
 }
-  const trendAverageBucketRequests =
-    usage.timeline.length > 0 ? usage.summary.requestCount / usage.timeline.length : 0;
 
 function HotCombinationsPanel({ matrix }: { matrix: UsageMatrix }) {
   const { t } = useTranslation();
@@ -2003,11 +1951,10 @@ function UsageAnalyticsPageInner() {
   const anomalyUrl = usage.anomalyAnalysis
     ? buildMonitoringDetailUrl(usage.anomalyAnalysis.point, usage.filters)
     : '';
-  const overviewP95Label =
-    usage.summary.p95LatencyMs === null && usage.summary.p95TtftMs !== null
-      ? t('usage_analytics.metric_p95_ttft')
-      : t('usage_analytics.metric_p95_latency');
-  const overviewP95Value = formatNullableMs(usage.summary.p95LatencyMs ?? usage.summary.p95TtftMs);
+  const overviewReasoningTokens = useMemo(
+    () => usage.timeline.reduce((sum, point) => sum + point.reasoningTokens, 0),
+    [usage.timeline]
+  );
   const providerOverviewRows = useMemo(
     () => mapProviderRowsToRankRows(usage.providerRows),
     [usage.providerRows]
@@ -2017,17 +1964,99 @@ function UsageAnalyticsPageInner() {
     () => summarizeAnomalies(usage.anomalyPoints, { minRequests: 10, limit: 3 }),
     [usage.anomalyPoints]
   );
-  const trendPeakRequestPoint = useMemo(
-    () => getMaxTimelinePoint(usage.timeline, (point) => point.requestCount),
-    [usage.timeline]
+  const overviewSummaryCards = useMemo(
+    () =>
+      buildUsageOverviewSummaryCards({
+        anomalyCount: usage.anomalyPoints.length,
+        locale: i18n.language,
+        reasoningTokens: overviewReasoningTokens,
+        summary: usage.summary,
+        summaryDelta: usage.summaryDelta,
+        t,
+      }),
+    [
+      i18n.language,
+      overviewReasoningTokens,
+      t,
+      usage.anomalyPoints.length,
+      usage.summary,
+      usage.summaryDelta,
+    ]
   );
-  const trendPeakFailurePoint = useMemo(
-    () => getMaxTimelinePoint(usage.timeline, (point) => point.failureRate),
-    [usage.timeline]
+  const trendSummaryCards = useMemo(
+    () =>
+      buildUsageTrendSummaryCards({
+        locale: i18n.language,
+        summaryDelta: usage.summaryDelta,
+        timeline: usage.timeline,
+        t,
+      }),
+    [i18n.language, t, usage.summaryDelta, usage.timeline]
   );
-  const trendPeakP95Ms = useMemo(
-    () => getMaxTimelineMs(usage.timeline, (point) => point.p95LatencyMs),
-    [usage.timeline]
+  const modelSummaryCards = useMemo(
+    () =>
+      buildUsageEntitySummaryCards({
+        activeAccent: 'indigo',
+        activeCount: usage.modelRows.length,
+        activeIcon: 'model',
+        activeLabel: t('usage_analytics.active_models'),
+        activeMeta: t('usage_analytics.summary_meta'),
+        locale: i18n.language,
+        summary: usage.summary,
+        t,
+      }),
+    [i18n.language, t, usage.modelRows.length, usage.summary]
+  );
+  const apiKeySummaryCards = useMemo(
+    () =>
+      buildUsageEntitySummaryCards({
+        activeAccent: 'violet',
+        activeCount: usage.apiKeyRows.length,
+        activeIcon: 'key',
+        activeLabel: t('usage_analytics.active_api_keys'),
+        activeMeta: t('usage_analytics.summary_meta'),
+        anomalyCount: abnormalApiKeyCount,
+        anomalyLabel: t('usage_analytics.anomaly_keys'),
+        locale: i18n.language,
+        summary: usage.summary,
+        t,
+      }),
+    [abnormalApiKeyCount, i18n.language, t, usage.apiKeyRows.length, usage.summary]
+  );
+  const credentialSummaryCards = useMemo(
+    () =>
+      buildUsageEntitySummaryCards({
+        activeAccent: 'cyan',
+        activeCount: usage.credentialRows.length,
+        activeIcon: 'credential',
+        activeLabel: t('usage_analytics.active_credentials'),
+        activeMeta: t('usage_analytics.active_credential_hint', {
+          active: usage.credentialRows.length,
+          total: usage.allCredentialRows.length,
+        }),
+        anomalyCount: abnormalCredentialCount,
+        anomalyLabel: t('usage_analytics.anomaly_credentials'),
+        locale: i18n.language,
+        summary: usage.summary,
+        t,
+      }),
+    [
+      abnormalCredentialCount,
+      i18n.language,
+      t,
+      usage.allCredentialRows.length,
+      usage.credentialRows.length,
+      usage.summary,
+    ]
+  );
+  const heatmapSummaryCards = useMemo(
+    () =>
+      buildUsageHeatmapSummaryCards({
+        locale: i18n.language,
+        summary: usage.summary,
+        t,
+      }),
+    [i18n.language, t, usage.summary]
   );
 
   const toggleMetric = (key: UsageMetricKey) => {
@@ -2233,55 +2262,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'overview' ? (
         <>
-          <section className={styles.overviewKpiGrid}>
-            {overviewSummaryCards.map((card) => {
-              const delta = getOverviewDelta(card.key);
-              return (
-                <div key={card.key} className={`${styles.summaryCard} ${styles[card.accent]}`}>
-                  <span className={styles.summaryIcon}>{card.icon}</span>
-                  <span>{getMetricLabel(card.key, t)}</span>
-                  <strong>{formatMetricValue(card.key, usage.summary[card.key])}</strong>
-                  {delta !== null ? (
-                    <OverviewDelta value={delta} />
-                  ) : (
-                    <em>
-                      {card.key === 'estimatedCost'
-                        ? t('usage_analytics.summary_cost_meta')
-                        : t('usage_analytics.summary_meta')}
-                    </em>
-                  )}
-                </div>
-              );
-            })}
-          </section>
-
-          <section className={styles.analysisSummaryGrid}>
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.success_rate')}
-              value={formatPercent(usage.summary.successRate)}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.metric_failure_count')}
-              value={compactNumber(usage.summary.failureCount)}
-            />
-            <AnalysisStat
-              icon={<IconTimer size={20} />}
-              label={overviewP95Label}
-              value={overviewP95Value}
-            />
-            <AnalysisStat
-              icon={<IconFilter size={20} />}
-              label={t('usage_analytics.cache_read_rate')}
-              value={formatPercent(computeCacheHitRate(usage.summary))}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.anomaly_points_title')}
-              value={compactNumber(usage.anomalyPoints.length)}
-            />
-          </section>
+          <UsageSummarySection cards={overviewSummaryCards} />
 
           <section className={styles.overviewHeroGrid}>
             <div className={styles.chartPanel}>
@@ -2344,72 +2325,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'trends' ? (
         <>
-          <section className={styles.trendKpiGrid}>
-            <AnalysisStat
-              icon={<IconTimer size={20} />}
-              label={t('usage_analytics.trend_peak_request_bucket')}
-              tone="indigo"
-              className={styles.trendBucketStat}
-              value={
-                trendPeakRequestPoint ? (
-                  <>
-                    <span>{trendPeakRequestPoint.label}</span>
-                    <span className={styles.trendBucketValueMeta}>
-                      {compactNumber(trendPeakRequestPoint.requestCount)}{' '}
-                      {t('usage_analytics.metric_request_count')}
-                    </span>
-                  </>
-                ) : (
-                  '-'
-                )
-              }
-            />
-            <AnalysisStat
-              icon={<IconChartLine size={20} />}
-              label={t('usage_analytics.trend_average_bucket_requests')}
-              tone="blue"
-              value={compactNumber(trendAverageBucketRequests)}
-            />
-            <AnalysisStat
-              icon={<IconTrendingUp size={20} />}
-              label={t('usage_analytics.trend_request_change')}
-              tone="blue"
-              value={formatTrendDelta(
-                usage.summaryDelta.hasComparison,
-                usage.summaryDelta.requestCount
-              )}
-            />
-            <AnalysisStat
-              icon={<IconDatabaseZap size={20} />}
-              label={t('usage_analytics.trend_token_change')}
-              tone="teal"
-              value={formatTrendDelta(
-                usage.summaryDelta.hasComparison,
-                usage.summaryDelta.totalTokens
-              )}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.trend_cost_change')}
-              tone="orange"
-              value={formatTrendDelta(
-                usage.summaryDelta.hasComparison,
-                usage.summaryDelta.estimatedCost
-              )}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.trend_failure_peak')}
-              tone="red"
-              value={trendPeakFailurePoint ? formatPercent(trendPeakFailurePoint.failureRate) : '-'}
-            />
-            <AnalysisStat
-              icon={<IconTimer size={20} />}
-              label={t('usage_analytics.trend_p95_peak')}
-              tone="violet"
-              value={formatNullableMs(trendPeakP95Ms)}
-            />
-          </section>
+          <UsageSummarySection cards={trendSummaryCards} />
 
           <section className={styles.chartPanel}>
             <div className={styles.panelHeader}>
@@ -2552,33 +2468,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'models' ? (
         <>
-          <section className={styles.analysisSummaryGrid}>
-            <AnalysisStat
-              icon={<IconModelCluster size={20} />}
-              label={t('usage_analytics.active_models')}
-              value={compactNumber(usage.modelRows.length)}
-            />
-            <AnalysisStat
-              icon={<IconDatabaseZap size={20} />}
-              label={t('usage_analytics.metric_total_tokens')}
-              value={formatMetricValue('totalTokens', usage.summary.totalTokens)}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.total_cost')}
-              value={formatMetricValue('estimatedCost', usage.summary.estimatedCost)}
-            />
-            <AnalysisStat
-              icon={<IconChartLine size={20} />}
-              label={t('usage_analytics.metric_request_count')}
-              value={formatMetricValue('requestCount', usage.summary.requestCount)}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.metric_average_cost_per_call')}
-              value={formatMetricValue('estimatedCost', usage.summary.averageCostPerCall)}
-            />
-          </section>
+          <UsageSummarySection cards={modelSummaryCards} />
           <section className={styles.analysisGrid}>
             <div className={styles.tablePanel}>
               <div className={styles.panelHeader}>
@@ -2621,33 +2511,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'apiKeys' ? (
         <>
-          <section className={styles.analysisSummaryGrid}>
-            <AnalysisStat
-              icon={<IconKey size={20} />}
-              label={t('usage_analytics.active_api_keys')}
-              value={compactNumber(usage.apiKeyRows.length)}
-            />
-            <AnalysisStat
-              icon={<IconChartLine size={20} />}
-              label={t('usage_analytics.metric_request_count')}
-              value={formatMetricValue('requestCount', usage.summary.requestCount)}
-            />
-            <AnalysisStat
-              icon={<IconDatabaseZap size={20} />}
-              label={t('usage_analytics.metric_total_tokens')}
-              value={formatMetricValue('totalTokens', usage.summary.totalTokens)}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.metric_estimated_cost')}
-              value={formatMetricValue('estimatedCost', usage.summary.estimatedCost)}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.anomaly_keys')}
-              value={compactNumber(abnormalApiKeyCount)}
-            />
-          </section>
+          <UsageSummarySection cards={apiKeySummaryCards} />
           <section className={styles.analysisGrid}>
             <div className={styles.apiSearchBar}>
               <IconSearch size={16} />
@@ -2721,33 +2585,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'credentials' ? (
         <>
-          <section className={styles.analysisSummaryGrid}>
-            <AnalysisStat
-              icon={<IconFileText size={20} />}
-              label={t('usage_analytics.active_credentials')}
-              value={compactNumber(usage.credentialRows.length)}
-            />
-            <AnalysisStat
-              icon={<IconChartLine size={20} />}
-              label={t('usage_analytics.metric_request_count')}
-              value={formatMetricValue('requestCount', usage.summary.requestCount)}
-            />
-            <AnalysisStat
-              icon={<IconDatabaseZap size={20} />}
-              label={t('usage_analytics.metric_total_tokens')}
-              value={formatMetricValue('totalTokens', usage.summary.totalTokens)}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.metric_estimated_cost')}
-              value={formatMetricValue('estimatedCost', usage.summary.estimatedCost)}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.anomaly_credentials')}
-              value={compactNumber(abnormalCredentialCount)}
-            />
-          </section>
+          <UsageSummarySection cards={credentialSummaryCards} />
           <section className={styles.analysisGrid}>
             <div className={styles.tablePanel}>
               <div className={styles.panelHeader}>
@@ -2830,32 +2668,7 @@ function UsageAnalyticsPageInner() {
 
       {usage.activeTab === 'heatmap' ? (
         <>
-          <section className={styles.analysisSummaryGrid}>
-            <AnalysisStat
-              icon={<IconChartLine size={20} />}
-              label={t('usage_analytics.metric_request_count')}
-              value={formatMetricValue('requestCount', usage.summary.requestCount)}
-            />
-            <AnalysisStat
-              icon={<IconDatabaseZap size={20} />}
-              label={t('usage_analytics.metric_total_tokens')}
-              value={formatMetricValue('totalTokens', usage.summary.totalTokens)}
-            />
-            <AnalysisStat
-              icon={<IconDollarSign size={20} />}
-              label={t('usage_analytics.metric_estimated_cost')}
-              value={formatMetricValue('estimatedCost', usage.summary.estimatedCost)}
-            />
-            <AnalysisStat
-              icon={<IconShield size={20} />}
-              label={t('usage_analytics.failure_rate')}
-              value={formatPercent(
-                usage.summary.requestCount > 0
-                  ? usage.summary.failureCount / usage.summary.requestCount
-                  : 0
-              )}
-            />
-          </section>
+          <UsageSummarySection cards={heatmapSummaryCards} />
           <section className={styles.chartPanel}>
             <div className={styles.panelHeader}>
               <div>
@@ -2897,44 +2710,6 @@ function UsageAnalyticsPageInner() {
         </>
       ) : null}
     </div>
-  );
-}
-
-function AnalysisStat({
-  className,
-  icon,
-  label,
-  tone,
-  value,
-}: {
-  className?: string;
-  icon: ReactNode;
-  label: string;
-  tone?: AnalysisStatTone;
-  value: ReactNode;
-}) {
-  const style = tone
-    ? ({ '--analysis-stat-accent': analysisStatToneColors[tone] } as CSSProperties)
-    : undefined;
-  return (
-    <div className={`${styles.analysisStat} ${className ?? ''}`} style={style}>
-      <span>{icon}</span>
-      <div>
-        <em>{label}</em>
-        <strong>{value}</strong>
-      </div>
-    </div>
-  );
-}
-
-function OverviewDelta({ value }: { value: number }) {
-  const { t } = useTranslation();
-  const tone = value > 0 ? styles.deltaUp : value < 0 ? styles.deltaDown : styles.deltaFlat;
-  const arrow = value > 0 ? '↑' : value < 0 ? '↓' : '→';
-  return (
-    <em className={`${styles.summaryDelta} ${tone}`}>
-      {arrow} {formatDelta(value)} · {t('usage_analytics.summary_vs_previous')}
-    </em>
   );
 }
 
