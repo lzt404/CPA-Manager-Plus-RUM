@@ -1,12 +1,9 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -17,6 +14,7 @@ import (
 	collectorpkg "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/collector"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpa"
+	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpaauthfiles"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/store"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/usage"
 )
@@ -56,7 +54,7 @@ type quotaAutoDisableCandidate struct {
 	Reason         string
 }
 
-type authFile map[string]any
+type authFile = cpaauthfiles.File
 
 func NewRateLimitAutoDisableWorker(st *store.Store, initial ...collectorpkg.RuntimeConfig) *RateLimitAutoDisableWorker {
 	w := &RateLimitAutoDisableWorker{
@@ -177,7 +175,7 @@ func (w *RateLimitAutoDisableWorker) handleCandidate(ctx context.Context, candid
 		log.Printf("[quota-auto-disable] auth file %q authIndex=%q not found/currently mismatched, skip auto disable", candidate.FileName, candidate.AuthIndex)
 		return
 	}
-	preDisabled := authFileDisabled(current)
+	preDisabled := current.Disabled
 	if preDisabled {
 		if w.extendExistingCooldown(ctx, candidate, current) {
 			return
@@ -194,7 +192,7 @@ func (w *RateLimitAutoDisableWorker) handleCandidate(ctx context.Context, candid
 
 	_, err = w.store.UpsertQuotaCooldown(ctx, store.QuotaCooldownUpsert{
 		AuthFileName:     candidate.FileName,
-		AuthIndex:        firstNonEmpty(candidate.AuthIndex, authFileAuthIndex(current)),
+		AuthIndex:        firstNonEmpty(candidate.AuthIndex, current.AuthIndex),
 		AccountSnapshot:  candidate.DisplayAccount,
 		Provider:         strings.ToLower(strings.TrimSpace(candidate.Provider)),
 		RecoverAtMS:      candidate.ResetAt.UnixMilli(),
@@ -229,14 +227,14 @@ func (w *RateLimitAutoDisableWorker) extendExistingCooldown(ctx context.Context,
 	if existing.ID == 0 {
 		return false
 	}
-	currentIndex := authFileAuthIndex(current)
+	currentIndex := current.AuthIndex
 	if existing.AuthIndex != "" && currentIndex != existing.AuthIndex {
 		log.Printf("[quota-auto-disable] active cooldown auth index mismatch for auth file %q: stored=%q current=%q", candidate.FileName, existing.AuthIndex, currentIndex)
 		return false
 	}
 	_, err = w.store.UpsertQuotaCooldown(ctx, store.QuotaCooldownUpsert{
 		AuthFileName:     candidate.FileName,
-		AuthIndex:        firstNonEmpty(candidate.AuthIndex, existing.AuthIndex, authFileAuthIndex(current)),
+		AuthIndex:        firstNonEmpty(candidate.AuthIndex, existing.AuthIndex, current.AuthIndex),
 		AccountSnapshot:  firstNonEmpty(candidate.DisplayAccount, existing.AccountSnapshot),
 		Provider:         strings.ToLower(strings.TrimSpace(firstNonEmpty(candidate.Provider, existing.Provider))),
 		RecoverAtMS:      candidate.ResetAt.UnixMilli(),
@@ -291,7 +289,7 @@ func (w *RateLimitAutoDisableWorker) recoverCooldown(ctx context.Context, baseUR
 		log.Printf("[quota-auto-disable] auth file %q authIndex=%q missing/mismatched, skip auto-enable", item.AuthFileName, item.AuthIndex)
 		return
 	}
-	if !authFileDisabled(current) {
+	if !current.Disabled {
 		_ = w.store.MarkQuotaCooldownRecovered(ctx, item.ID, now.UnixMilli())
 		log.Printf("[quota-auto-disable] auth file %q already enabled; marked cooldown recovered", item.AuthFileName)
 		return
@@ -483,139 +481,12 @@ func parseCommonTime(text string) (time.Time, bool) {
 }
 
 func (w *RateLimitAutoDisableWorker) currentAuthFile(ctx context.Context, baseURL string, managementKey string, fileName string, authIndex string) (authFile, bool, error) {
-	files, err := w.fetchAuthFiles(ctx, baseURL, managementKey)
+	files, err := cpaauthfiles.New(w.client, quotaAutoDisableActionTimeout).Fetch(ctx, baseURL, managementKey)
 	if err != nil {
-		return nil, false, err
+		return authFile{}, false, err
 	}
-	fileName = strings.TrimSpace(fileName)
-	authIndex = strings.TrimSpace(authIndex)
-	for _, file := range files {
-		if authFileName(file) != fileName {
-			continue
-		}
-		if authIndex != "" && authFileAuthIndex(file) != authIndex {
-			continue
-		}
-		return file, true, nil
-	}
-	return nil, false, nil
-}
-
-func (w *RateLimitAutoDisableWorker) fetchAuthFiles(ctx context.Context, baseURL string, managementKey string) ([]authFile, error) {
-	base := cpa.NormalizeBaseURL(baseURL)
-	paths := []string{
-		base + "/auth-files",
-		base + "/v0/management/auth-files",
-	}
-	client := w.client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	var endpointErrors []string
-	for _, endpoint := range paths {
-		reqCtx, cancel := context.WithTimeout(ctx, quotaAutoDisableActionTimeout)
-		req, reqErr := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
-		if reqErr != nil {
-			cancel()
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: %v", endpoint, reqErr))
-			continue
-		}
-		req.Header.Set("Authorization", "Bearer "+managementKey)
-		res, doErr := client.Do(req)
-		cancel()
-		if doErr != nil {
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: %v", endpoint, doErr))
-			continue
-		}
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-		_ = res.Body.Close()
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: HTTP %d %s", endpoint, res.StatusCode, strings.TrimSpace(string(body))))
-			continue
-		}
-		files, err := parseAuthFiles(body)
-		if err != nil {
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: %v", endpoint, err))
-			continue
-		}
-		return files, nil
-	}
-	if len(endpointErrors) == 0 {
-		return nil, errors.New("no auth-file endpoint attempted")
-	}
-	return nil, fmt.Errorf("all auth-file endpoints failed: %s", strings.Join(endpointErrors, "; "))
-}
-
-func parseAuthFiles(body []byte) ([]authFile, error) {
-	var decoded any
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&decoded); err != nil {
-		return nil, err
-	}
-	files := authFilesFromJSON(decoded)
-	if files == nil {
-		return []authFile{}, nil
-	}
-	return files, nil
-}
-
-func authFilesFromJSON(value any) []authFile {
-	switch typed := value.(type) {
-	case []any:
-		files := make([]authFile, 0, len(typed))
-		for _, item := range typed {
-			if m, ok := item.(map[string]any); ok {
-				files = append(files, authFile(m))
-			}
-		}
-		return files
-	case map[string]any:
-		for _, key := range []string{"auth_files", "authFiles", "files", "items", "data"} {
-			if child, ok := typed[key]; ok {
-				if files := authFilesFromJSON(child); files != nil {
-					return files
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func authFileName(file authFile) string {
-	return firstNonEmpty(stringField(file, "name"), stringField(file, "file_name"), stringField(file, "fileName"), stringField(file, "id"))
-}
-
-func authFileAuthIndex(file authFile) string {
-	return firstNonEmpty(stringField(file, "auth_index"), stringField(file, "authIndex"), stringField(file, "auth-index"))
-}
-
-func authFileDisabled(file authFile) bool {
-	if raw, ok := file["disabled"]; ok {
-		switch value := raw.(type) {
-		case bool:
-			return value
-		case json.Number:
-			parsed, _ := strconv.ParseFloat(value.String(), 64)
-			return parsed != 0
-		case float64:
-			return value != 0
-		case string:
-			return strings.EqualFold(strings.TrimSpace(value), "true") || strings.TrimSpace(value) == "1"
-		}
-	}
-	status := strings.ToLower(firstNonEmpty(stringField(file, "status"), stringField(file, "state")))
-	return status == "disabled" || status == "inactive"
-}
-
-func stringField(file authFile, key string) string {
-	if file == nil {
-		return ""
-	}
-	if value, ok := file[key]; ok && value != nil {
-		return strings.TrimSpace(fmt.Sprint(value))
-	}
-	return ""
+	file, ok := cpaauthfiles.Find(files, fileName, authIndex)
+	return file, ok, nil
 }
 
 func (w *RateLimitAutoDisableWorker) disableAuthFile(ctx context.Context, baseURL string, managementKey string, fileName string) error {
@@ -627,55 +498,7 @@ func (w *RateLimitAutoDisableWorker) enableAuthFile(ctx context.Context, baseURL
 }
 
 func (w *RateLimitAutoDisableWorker) patchAuthFile(ctx context.Context, baseURL string, managementKey string, fileName string, disabled bool) error {
-	payload := map[string]any{"name": fileName, "disabled": disabled}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-
-	base := cpa.NormalizeBaseURL(baseURL)
-	paths := []string{
-		base + "/auth-files",
-		base + "/auth-files/status",
-		base + "/v0/management/auth-files",
-		base + "/v0/management/auth-files/status",
-	}
-
-	client := w.client
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	var endpointErrors []string
-	for _, endpoint := range paths {
-		reqCtx, cancel := context.WithTimeout(ctx, quotaAutoDisableActionTimeout)
-		req, reqErr := http.NewRequestWithContext(reqCtx, http.MethodPatch, endpoint, bytes.NewReader(data))
-		if reqErr != nil {
-			cancel()
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: %v", endpoint, reqErr))
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+managementKey)
-
-		res, doErr := client.Do(req)
-		cancel()
-		if doErr != nil {
-			endpointErrors = append(endpointErrors, fmt.Sprintf("%s: %v", endpoint, doErr))
-			continue
-		}
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		_ = res.Body.Close()
-
-		if res.StatusCode >= 200 && res.StatusCode < 300 {
-			return nil
-		}
-		endpointErrors = append(endpointErrors, fmt.Sprintf("%s: HTTP %d %s", endpoint, res.StatusCode, strings.TrimSpace(string(body))))
-	}
-	if len(endpointErrors) == 0 {
-		return errors.New("no auth-file status endpoint attempted")
-	}
-	return fmt.Errorf("all auth-file status endpoints failed: %s", strings.Join(endpointErrors, "; "))
+	return cpaauthfiles.New(w.client, quotaAutoDisableActionTimeout).PatchDisabled(ctx, baseURL, managementKey, fileName, disabled)
 }
 
 func firstNonEmpty(values ...string) string {
