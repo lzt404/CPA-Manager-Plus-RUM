@@ -2,6 +2,10 @@ import type { TFunction } from 'i18next';
 import {
   computeCacheHitRate,
   formatMetricValue,
+  USAGE_MODEL_LONG_TAIL_SHARE,
+  USAGE_MODEL_TOP_SHARE_THRESHOLD,
+  USAGE_SUCCESS_RATE_WATCH_THRESHOLD,
+  type UsageRankRow,
   type UsageSummaryDelta,
   type UsageSummaryMetrics,
   type UsageTimelinePoint,
@@ -70,6 +74,11 @@ type EntitySummaryCardsInput = CommonSummaryContext & {
   activeAccent: UsageSummaryCardAccent;
   anomalyCount?: number;
   anomalyLabel?: string;
+  summary: UsageSummaryMetrics;
+};
+
+type ModelSummaryCardsInput = CommonSummaryContext & {
+  modelRows: UsageRankRow[];
   summary: UsageSummaryMetrics;
 };
 
@@ -373,6 +382,73 @@ export const buildUsageEntitySummaryCards = ({
         : formatCompactNumber(anomalyCount),
   },
 ];
+
+export const buildUsageModelSummaryCards = ({
+  locale,
+  modelRows,
+  summary,
+  t,
+}: ModelSummaryCardsInput): UsageSummaryCard[] => {
+  const topModel = modelRows[0];
+  // With a single costed model, a 100% top share is trivially true — not a concentration signal.
+  const costedModelCount = modelRows.filter((row) => row.estimatedCost > 0).length;
+  const lowestSuccessModel = modelRows
+    .filter((row) => row.requestCount > 0)
+    .reduce<UsageRankRow | null>(
+      (current, row) => (!current || row.successRate < current.successRate ? row : current),
+      null
+    );
+  const longTailShare = modelRows
+    .filter((row) => row.share < USAGE_MODEL_LONG_TAIL_SHARE)
+    .reduce((sum, row) => sum + row.share, 0);
+  return [
+    {
+      accent: 'teal',
+      icon: 'model',
+      label: t('usage_analytics.active_models'),
+      meta: t('usage_analytics.summary_meta'),
+      value: formatCompactNumber(modelRows.length),
+      valueTitle: formatFullNumber(modelRows.length, locale),
+    },
+    {
+      accent: 'amber',
+      icon: 'cost',
+      label: t('usage_analytics.model_top_cost_share'),
+      meta: topModel ? topModel.label : t('usage_analytics.summary_meta'),
+      tone:
+        topModel && costedModelCount >= 2 && topModel.share >= USAGE_MODEL_TOP_SHARE_THRESHOLD
+          ? 'warn'
+          : undefined,
+      value: topModel ? formatPercent(topModel.share) : '-',
+    },
+    {
+      accent: 'red',
+      icon: 'failure',
+      label: t('usage_analytics.model_lowest_success'),
+      meta: lowestSuccessModel ? lowestSuccessModel.label : t('usage_analytics.summary_meta'),
+      tone: lowestSuccessModel
+        ? lowestSuccessModel.successRate < USAGE_SUCCESS_RATE_WATCH_THRESHOLD
+          ? 'bad'
+          : 'good'
+        : undefined,
+      value: lowestSuccessModel ? formatPercent(lowestSuccessModel.successRate) : '-',
+    },
+    {
+      accent: 'blue',
+      icon: 'trend',
+      label: t('usage_analytics.model_long_tail_share'),
+      meta: t('usage_analytics.model_long_tail_meta'),
+      value: formatPercent(longTailShare),
+    },
+    {
+      accent: 'amber',
+      icon: 'cost',
+      label: t('usage_analytics.metric_estimated_cost'),
+      meta: t('usage_analytics.summary_cost_meta'),
+      value: formatMetricValue('estimatedCost', summary.estimatedCost),
+    },
+  ];
+};
 
 export const buildUsageHeatmapSummaryCards = ({
   locale,

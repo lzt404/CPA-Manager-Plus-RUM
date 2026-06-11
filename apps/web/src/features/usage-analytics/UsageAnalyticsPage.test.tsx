@@ -545,6 +545,43 @@ describe('UsageAnalyticsPage', () => {
     expect(text).toContain('usage_analytics.trend_pending_data');
   });
 
+  it('renders the models tab with unit-economics columns and model-scoped insights only', () => {
+    mocks.usageState = createUsageState({
+      activeTab: 'models',
+      insights: [
+        {
+          id: 'model-cost-share',
+          tone: 'warning',
+          titleKey: 'usage_analytics.insight_model_cost_high',
+          bodyKey: 'usage_analytics.insight_model_cost_high_body',
+          actionTab: 'models',
+        },
+        {
+          id: 'credential-health',
+          tone: 'danger',
+          titleKey: 'usage_analytics.insight_credential_success_drop',
+          bodyKey: 'usage_analytics.insight_credential_success_drop_body',
+          actionTab: 'credentials',
+        },
+      ],
+    });
+    const renderer = renderPage();
+    const text = getText(renderer.root);
+
+    expect(text).toContain('usage_analytics.model_rank_title');
+    expect(text).toContain('usage_analytics.cache_read_rate');
+    expect(text).toContain('usage_analytics.metric_average_cost_per_call');
+    expect(text).toContain('usage_analytics.metric_failure_count');
+    expect(text).toContain('usage_analytics.cost_share');
+    expect(text).toContain('usage_analytics.model_top_cost_share');
+    expect(text).toContain('usage_analytics.model_caller_distribution');
+    expect(text).toContain('usage_analytics.view_request_details');
+    expect(text).toContain('usage_analytics.insight_model_cost_high');
+    expect(text).not.toContain('usage_analytics.insight_credential_success_drop');
+    // Only one model row, so the show-all toggle stays hidden.
+    expect(text).not.toContain('usage_analytics.rank_show_all');
+  });
+
   it('offers time range and status controls that update usage filters', () => {
     const usageState = createUsageState();
     mocks.usageState = usageState;

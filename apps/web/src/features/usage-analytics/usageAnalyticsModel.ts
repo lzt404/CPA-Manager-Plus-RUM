@@ -1177,6 +1177,46 @@ export const buildEntityTrendSeries = (
     });
 };
 
+export const computeRowCacheHitRate = (row: UsageRankRow): number =>
+  computeCacheHitRate({
+    inputTokens: row.inputTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheCreationTokens: row.cacheCreationTokens,
+    cachedTokens: row.cachedTokens,
+  });
+
+export const computeRowAverageCostPerCall = (row: UsageRankRow): number =>
+  row.requestCount > 0 ? row.estimatedCost / row.requestCount : 0;
+
+export type UsageModelKeyDistributionRow = {
+  id: string;
+  label: string;
+  totalTokens: number;
+  share: number;
+};
+
+// Reverse distribution: which API keys drive the selected model, derived from
+// the per-key model breakdown already shipped with apiKeyRows.
+export const buildModelKeyDistribution = (
+  modelId: string,
+  apiKeyRows: UsageRankRow[],
+  limit = 4
+): UsageModelKeyDistributionRow[] => {
+  const entries = apiKeyRows
+    .map((keyRow) => {
+      const modelRow = keyRow.models?.find((model) => model.id === modelId);
+      if (!modelRow || modelRow.totalTokens <= 0) return null;
+      return { id: keyRow.id, label: keyRow.label, totalTokens: modelRow.totalTokens };
+    })
+    .filter((entry): entry is { id: string; label: string; totalTokens: number } => entry !== null)
+    .sort((left, right) => right.totalTokens - left.totalTokens);
+  const total = entries.reduce((sum, entry) => sum + entry.totalTokens, 0);
+  return entries.slice(0, limit).map((entry) => ({
+    ...entry,
+    share: safeShare(entry.totalTokens, total),
+  }));
+};
+
 export const buildKeyAnomalies = (rows: UsageRankRow[]): UsageKeyAnomalyRow[] =>
   rows
     .filter((row) => row.failureCount > 0 || row.share >= 0.2 || row.successRate < 0.96)
@@ -1240,6 +1280,11 @@ export const buildCredentialQuotaRows = (
     };
   });
 
+// Shared thresholds so insights and summary cards stay on the same definition.
+export const USAGE_MODEL_TOP_SHARE_THRESHOLD = 0.45;
+export const USAGE_MODEL_LONG_TAIL_SHARE = 0.08;
+export const USAGE_SUCCESS_RATE_WATCH_THRESHOLD = 0.97;
+
 export const buildUsageInsights = ({
   apiKeyRows,
   credentialRows,
@@ -1255,7 +1300,7 @@ export const buildUsageInsights = ({
 }): UsageInsight[] => {
   const insights: UsageInsight[] = [];
   const topModel = modelRows[0];
-  if (topModel && topModel.share >= 0.45) {
+  if (topModel && topModel.share >= USAGE_MODEL_TOP_SHARE_THRESHOLD) {
     insights.push({
       id: 'model-cost-share',
       tone: 'warning',
@@ -1274,7 +1319,9 @@ export const buildUsageInsights = ({
       actionTab: 'apiKeys',
     });
   }
-  const unhealthyCredential = credentialRows.find((row) => row.failureCount > 0 || row.successRate < 0.97);
+  const unhealthyCredential = credentialRows.find(
+    (row) => row.failureCount > 0 || row.successRate < USAGE_SUCCESS_RATE_WATCH_THRESHOLD
+  );
   if (unhealthyCredential) {
     insights.push({
       id: 'credential-health',
@@ -1285,7 +1332,7 @@ export const buildUsageInsights = ({
     });
   }
   const lowCostModels = modelRows
-    .filter((row) => row.share < 0.08)
+    .filter((row) => row.share < USAGE_MODEL_LONG_TAIL_SHARE)
     .reduce((sum, row) => sum + row.share, 0);
   if (lowCostModels >= 0.12) {
     insights.push({

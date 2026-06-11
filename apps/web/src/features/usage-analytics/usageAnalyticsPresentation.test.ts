@@ -1,12 +1,14 @@
 import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 import type {
+  UsageRankRow,
   UsageSummaryDelta,
   UsageSummaryMetrics,
   UsageTimelinePoint,
 } from './usageAnalyticsModel';
 import {
   buildUsageEntitySummaryCards,
+  buildUsageModelSummaryCards,
   buildUsageOverviewSummaryCards,
   buildUsageTrendSummaryCards,
   formatUsageDurationMs,
@@ -162,5 +164,62 @@ describe('usageAnalyticsPresentation', () => {
       tone: 'bad',
       value: '2',
     });
+  });
+
+  it('builds model summary cards from model-dimension stats', () => {
+    const modelRow = (overrides: Partial<UsageRankRow>): UsageRankRow => ({
+      id: 'model',
+      label: 'model',
+      requestCount: 100,
+      successCount: 100,
+      failureCount: 0,
+      successRate: 1,
+      totalTokens: 1000,
+      inputTokens: 600,
+      outputTokens: 400,
+      cachedTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      estimatedCost: 10,
+      averageLatencyMs: null,
+      share: 0.5,
+      ...overrides,
+    });
+    const cards = buildUsageModelSummaryCards({
+      locale: 'en',
+      modelRows: [
+        modelRow({ id: 'gpt-5.5', label: 'gpt-5.5', share: 0.9, successRate: 0.99 }),
+        modelRow({ id: 'gpt-5.4-mini', label: 'gpt-5.4-mini', share: 0.06, successRate: 0.71 }),
+        modelRow({ id: 'glm-5', label: 'glm-5', share: 0.04, successRate: 0.25, requestCount: 0 }),
+      ],
+      summary,
+      t,
+    });
+
+    expect(cards.map((card) => card.label)).toEqual([
+      'usage_analytics.active_models',
+      'usage_analytics.model_top_cost_share',
+      'usage_analytics.model_lowest_success',
+      'usage_analytics.model_long_tail_share',
+      'usage_analytics.metric_estimated_cost',
+    ]);
+    expect(cards[0].value).toBe('3');
+    expect(cards[1]).toMatchObject({ meta: 'gpt-5.5', tone: 'warn', value: '90.0%' });
+    // glm-5 has zero requests, so the lowest-success slot falls to gpt-5.4-mini.
+    expect(cards[2]).toMatchObject({ meta: 'gpt-5.4-mini', tone: 'bad', value: '71.0%' });
+    expect(cards[3].value).toBe('10.0%');
+
+    // A 100% top share is trivially true with a single costed model — no warn tone.
+    const singleCostedCards = buildUsageModelSummaryCards({
+      locale: 'en',
+      modelRows: [
+        modelRow({ id: 'gpt-5.5', label: 'gpt-5.5', share: 1, estimatedCost: 10 }),
+        modelRow({ id: 'glm-5', label: 'glm-5', share: 0, estimatedCost: 0 }),
+      ],
+      summary,
+      t,
+    });
+    expect(singleCostedCards[1].tone).toBeUndefined();
+    expect(singleCostedCards[1].value).toBe('100.0%');
   });
 });

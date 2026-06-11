@@ -6,6 +6,7 @@ import {
   buildApiKeyRows,
   buildDrilldownPreview,
   buildKeyAnomalies,
+  buildModelKeyDistribution,
   buildMonitoringDetailUrl,
   buildUsageMatrix,
   buildUsageAnalyticsFilters,
@@ -14,6 +15,8 @@ import {
   buildUsageHeatmapChartData,
   buildUsageTimeline,
   computeCacheHitRate,
+  computeRowAverageCostPerCall,
+  computeRowCacheHitRate,
   getUsageRangeBounds,
   maskApiKeyHash,
   resolveUsageGranularity,
@@ -446,6 +449,78 @@ describe('cache hit rate', () => {
         cachedTokens: 1000,
       })
     ).toBe(1);
+  });
+});
+
+describe('model rank derivations', () => {
+  const rankRow = (overrides: Partial<UsageRankRow>): UsageRankRow => ({
+    id: 'row',
+    label: 'row',
+    requestCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    successRate: 0,
+    totalTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    estimatedCost: 0,
+    averageLatencyMs: null,
+    share: 0,
+    ...overrides,
+  });
+
+  it('derives per-row cache hit rate and average cost per call', () => {
+    const row = rankRow({
+      requestCount: 50,
+      inputTokens: 100,
+      cacheReadTokens: 300,
+      cacheCreationTokens: 50,
+      estimatedCost: 10,
+    });
+    expect(computeRowCacheHitRate(row)).toBeCloseTo(300 / 450, 6);
+    expect(computeRowAverageCostPerCall(row)).toBeCloseTo(0.2, 6);
+    expect(computeRowAverageCostPerCall(rankRow({ estimatedCost: 10 }))).toBe(0);
+  });
+
+  it('builds the reverse key distribution for a model from API key breakdowns', () => {
+    const apiKeyRows = [
+      rankRow({
+        id: 'hash-a',
+        label: 'sk-****aaaa',
+        models: [
+          rankRow({ id: 'gpt-5.5', label: 'gpt-5.5', totalTokens: 900 }),
+          rankRow({ id: 'glm-5', label: 'glm-5', totalTokens: 50 }),
+        ],
+      }),
+      rankRow({
+        id: 'hash-b',
+        label: 'sk-****bbbb',
+        models: [rankRow({ id: 'gpt-5.5', label: 'gpt-5.5', totalTokens: 100 })],
+      }),
+      rankRow({ id: 'hash-c', label: 'sk-****cccc', models: [] }),
+    ];
+
+    const distribution = buildModelKeyDistribution('gpt-5.5', apiKeyRows);
+
+    expect(distribution).toEqual([
+      { id: 'hash-a', label: 'sk-****aaaa', totalTokens: 900, share: 0.9 },
+      { id: 'hash-b', label: 'sk-****bbbb', totalTokens: 100, share: 0.1 },
+    ]);
+    expect(buildModelKeyDistribution('unknown-model', apiKeyRows)).toEqual([]);
+  });
+
+  it('caps the reverse key distribution at the requested limit', () => {
+    const apiKeyRows = Array.from({ length: 6 }, (_, index) =>
+      rankRow({
+        id: `hash-${index}`,
+        label: `sk-****${index}`,
+        models: [rankRow({ id: 'gpt-5.5', totalTokens: 100 - index })],
+      })
+    );
+    expect(buildModelKeyDistribution('gpt-5.5', apiKeyRows)).toHaveLength(4);
   });
 });
 

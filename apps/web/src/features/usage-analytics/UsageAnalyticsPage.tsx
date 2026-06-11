@@ -43,8 +43,11 @@ import {
 import { useThemeStore } from '@/stores';
 import {
   buildUsageHeatmapChartData,
+  buildModelKeyDistribution,
   buildMonitoringDetailUrl,
   buildOptionValues,
+  computeRowAverageCostPerCall,
+  computeRowCacheHitRate,
   summarizeAnomalies,
   anomalyMetricLabelKey,
   DEFAULT_SELECTED_METRICS,
@@ -58,6 +61,7 @@ import {
   USAGE_MATRIX_DIMENSIONS,
   USAGE_MATRIX_METRICS,
   USAGE_METRICS,
+  USAGE_SUCCESS_RATE_WATCH_THRESHOLD,
   USAGE_TIME_RANGES,
   type UsageAnalyticsTab,
   type UsageCredentialQuotaRow,
@@ -75,6 +79,7 @@ import {
   type UsageMatrixDimension,
   type UsageMatrixMetricKey,
   type UsageMetricKey,
+  type UsageModelKeyDistributionRow,
   type UsageProviderRow,
   type UsageRankRow,
   type UsageServerAnomaly,
@@ -85,6 +90,7 @@ import { useUsageAnalytics } from './useUsageAnalytics';
 import { UsageSummarySection } from './components/UsageSummaryCards';
 import {
   buildUsageEntitySummaryCards,
+  buildUsageModelSummaryCards,
   buildUsageHeatmapSummaryCards,
   buildUsageOverviewSummaryCards,
   buildUsageTrendSummaryCards,
@@ -1855,12 +1861,15 @@ function TokenStructureChart({ timeline }: { timeline: UsageTimelinePoint[] }) {
 function EntityTrendChart({
   metric,
   series,
+  highlightId,
 }: {
   metric: UsageTrendMetricKey;
   series: UsageEntityTrendSeries[];
+  highlightId?: string;
 }) {
   const { t } = useTranslation();
   const chartTheme = useUsageChartTheme();
+  const hasHighlight = Boolean(highlightId && series.some((item) => item.id === highlightId));
   const option = useMemo<EntityTrendChartOption>(
     () => ({
       animationDuration: 260,
@@ -1921,19 +1930,23 @@ function EntityTrendChart({
         splitLine: { lineStyle: { color: chartTheme.surface.splitLine, type: 'dashed' } },
         type: 'value',
       },
-      series: series.map((item, index) => ({
-        data: item.points.map((point) => point.value),
-        lineStyle: {
-          color: chartTheme.categoryPalette[index % chartTheme.categoryPalette.length],
-          width: 2.3,
-        },
-        name: item.label,
-        showSymbol: item.points.length <= 36,
-        smooth: 0.25,
-        type: 'line',
-      })),
+      series: series.map((item, index) => {
+        const highlighted = hasHighlight && item.id === highlightId;
+        return {
+          data: item.points.map((point) => point.value),
+          lineStyle: {
+            color: chartTheme.categoryPalette[index % chartTheme.categoryPalette.length],
+            opacity: hasHighlight && !highlighted ? 0.28 : 1,
+            width: highlighted ? 3.4 : 2.3,
+          },
+          name: item.label,
+          showSymbol: item.points.length <= 36,
+          smooth: 0.25,
+          type: 'line',
+        };
+      }),
     }),
-    [chartTheme, metric, series]
+    [chartTheme, hasHighlight, highlightId, metric, series]
   );
 
   if (series.length === 0) {
@@ -2018,13 +2031,15 @@ function MatrixHeatmap({ matrix }: { matrix: UsageMatrix }) {
 function InsightsPanel({
   insights,
   onOpen,
+  className,
 }: {
   insights: UsageInsight[];
   onOpen: (tab: UsageAnalyticsTab) => void;
+  className?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <div className={styles.panel}>
+    <div className={`${styles.panel}${className ? ` ${className}` : ''}`}>
       <div className={styles.panelHeader}>
         <div>
           <h2>{t('usage_analytics.insights_title')}</h2>
@@ -2261,6 +2276,7 @@ function UsageAnalyticsPageInner() {
   const [selectedMetrics, setSelectedMetrics] =
     useState<UsageMetricKey[]>(DEFAULT_SELECTED_METRICS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [showAllModels, setShowAllModels] = useState(false);
   const [customStartInput, setCustomStartInput] = useState(() =>
     formatDateTimeLocalValue(
       new Date(usage.filters.customRange?.startMs ?? Date.now() - 24 * 60 * 60 * 1000)
@@ -2412,9 +2428,31 @@ function UsageAnalyticsPageInner() {
     label: t(`usage_analytics.matrix_metric_${metric}`),
   }));
   const noData = !usage.loading && !usage.error && !hasUsageData(usage.summary, usage.timeline);
-  const visibleModelRows = usage.modelRows.slice(0, 8);
+  const rankRowLimit = 8;
+  const visibleModelRows = showAllModels
+    ? usage.modelRows
+    : usage.modelRows.slice(0, rankRowLimit);
   const visibleApiKeyRows = usage.apiKeyRows.slice(0, 8);
   const visibleCredentialRows = usage.credentialRows.slice(0, 8);
+  const modelInsights = useMemo(
+    () => usage.insights.filter((insight) => insight.actionTab === 'models'),
+    [usage.insights]
+  );
+  const credentialInsights = useMemo(
+    () => usage.insights.filter((insight) => insight.actionTab === 'credentials'),
+    [usage.insights]
+  );
+  const heatmapInsights = useMemo(
+    () => usage.insights.filter((insight) => insight.actionTab === 'heatmap'),
+    [usage.insights]
+  );
+  const selectedModelKeyDistribution = useMemo(
+    () =>
+      usage.selectedModel
+        ? buildModelKeyDistribution(usage.selectedModel.id, usage.apiKeyRows)
+        : [],
+    [usage.apiKeyRows, usage.selectedModel]
+  );
   const abnormalApiKeyCount = usage.apiKeyRows.filter(
     (row) => row.failureCount > 0 || row.share > 0.3
   ).length;
@@ -2468,17 +2506,13 @@ function UsageAnalyticsPageInner() {
   );
   const modelSummaryCards = useMemo(
     () =>
-      buildUsageEntitySummaryCards({
-        activeAccent: 'teal',
-        activeCount: usage.modelRows.length,
-        activeIcon: 'model',
-        activeLabel: t('usage_analytics.active_models'),
-        activeMeta: t('usage_analytics.summary_meta'),
+      buildUsageModelSummaryCards({
         locale: i18n.language,
+        modelRows: usage.modelRows,
         summary: usage.summary,
         t,
       }),
-    [i18n.language, t, usage.modelRows.length, usage.summary]
+    [i18n.language, t, usage.modelRows, usage.summary]
   );
   const apiKeySummaryCards = useMemo(
     () =>
@@ -2971,43 +3005,82 @@ function UsageAnalyticsPageInner() {
       {usage.activeTab === 'models' ? (
         <>
           <UsageSummarySection cards={modelSummaryCards} />
-          <section className={styles.analysisGrid}>
-            <div className={styles.tablePanel}>
+          <section className={styles.tablePanel}>
+            <div className={styles.panelHeader}>
+              <h2>{t('usage_analytics.model_rank_title')}</h2>
+              {usage.modelRows.length > rankRowLimit ? (
+                <button
+                  type="button"
+                  className={styles.filterActionButton}
+                  onClick={() => setShowAllModels((open) => !open)}
+                >
+                  {showAllModels
+                    ? t('usage_analytics.rank_collapse')
+                    : t('usage_analytics.rank_show_all', { count: usage.modelRows.length })}
+                </button>
+              ) : null}
+            </div>
+            <RankTable
+              rows={visibleModelRows}
+              type="model"
+              selectedId={usage.selectedModel?.id}
+              onSelect={(row) => usage.setSelectedModelId(row.id)}
+            />
+          </section>
+          <section className={styles.dualChartGrid}>
+            <div className={styles.panel}>
               <div className={styles.panelHeader}>
-                <h2>{t('usage_analytics.model_rank_title')}</h2>
+                <div>
+                  <h2>{t('usage_analytics.model_compare_title')}</h2>
+                  <p>{t('usage_analytics.entity_trend_hint')}</p>
+                </div>
+                <Select
+                  value={usage.trendMetric}
+                  options={trendMetricSelectOptions}
+                  onChange={(value) => usage.setTrendMetric(value as UsageTrendMetricKey)}
+                  ariaLabel={t('usage_analytics.filter_metric')}
+                  triggerClassName={styles.compactSelectTrigger}
+                />
               </div>
-              <RankTable
-                rows={visibleModelRows}
-                type="model"
-                selectedId={usage.selectedModel?.id}
-                onSelect={(row) => usage.setSelectedModelId(row.id)}
+              <EntityTrendChart
+                series={usage.modelTrendSeries}
+                metric={usage.trendMetric}
+                highlightId={usage.selectedModel?.id}
               />
             </div>
-            <div className={styles.sidePanels}>
-              <div className={styles.panel}>
-                <h2>{t('usage_analytics.cost_share_title')}</h2>
-                <CostShareChart rows={usage.modelRows} />
-              </div>
-              <div className={styles.panel}>
-                <div className={styles.panelHeader}>
-                  <div>
-                    <h2>{t('usage_analytics.model_compare_title')}</h2>
-                    <p>{t('usage_analytics.entity_trend_hint')}</p>
-                  </div>
-                  <Select
-                    value={usage.trendMetric}
-                    options={trendMetricSelectOptions}
-                    onChange={(value) => usage.setTrendMetric(value as UsageTrendMetricKey)}
-                    ariaLabel={t('usage_analytics.filter_metric')}
-                    triggerClassName={styles.compactSelectTrigger}
-                  />
-                </div>
-                <EntityTrendChart series={usage.modelTrendSeries} metric={usage.trendMetric} />
-              </div>
+            <div className={styles.panel}>
+              <h2>{t('usage_analytics.cost_share_title')}</h2>
+              <CostShareChart rows={usage.modelRows} />
             </div>
-            {usage.selectedModel ? <DetailPanel row={usage.selectedModel} type="model" /> : null}
-            <InsightsPanel insights={usage.insights} onOpen={usage.setActiveTab} />
           </section>
+          {usage.selectedModel ? (
+            <DetailPanel
+              row={usage.selectedModel}
+              type="model"
+              keyDistribution={selectedModelKeyDistribution}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const model = usage.selectedModel?.label ?? '';
+                    navigate(
+                      usage.bounds
+                        ? buildMonitoringDetailUrl(
+                            { bucketMs: usage.bounds.fromMs, bucketEndMs: usage.bounds.toMs },
+                            { model }
+                          )
+                        : `/monitoring?model=${encodeURIComponent(model)}`
+                    );
+                  }}
+                >
+                  <IconExternalLink size={14} />
+                  {t('usage_analytics.view_request_details')}
+                </Button>
+              }
+            />
+          ) : null}
+          <InsightsPanel insights={modelInsights} onOpen={usage.setActiveTab} />
         </>
       ) : null}
 
@@ -3163,7 +3236,11 @@ function UsageAnalyticsPageInner() {
               </div>
               <CredentialQuotaTable rows={usage.credentialQuotaRows} locale={i18n.language} />
             </div>
-            <InsightsPanel insights={usage.insights} onOpen={usage.setActiveTab} />
+            <InsightsPanel
+              insights={credentialInsights}
+              onOpen={usage.setActiveTab}
+              className={styles.fullWidthPanel}
+            />
           </section>
         </>
       ) : null}
@@ -3207,7 +3284,7 @@ function UsageAnalyticsPageInner() {
           </section>
           <section className={styles.analysisGrid}>
             <HotCombinationsPanel matrix={usage.matrix} />
-            <InsightsPanel insights={usage.insights} onOpen={usage.setActiveTab} />
+            <InsightsPanel insights={heatmapInsights} onOpen={usage.setActiveTab} />
           </section>
         </>
       ) : null}
@@ -3391,7 +3468,15 @@ function RankTable({
         : t('usage_analytics.col_credential');
   return (
     <div className={styles.tableWrap}>
-      <table className={type === 'apiKey' ? styles.apiKeyTable : styles.modelTable}>
+      <table
+        className={
+          type === 'apiKey'
+            ? styles.apiKeyTable
+            : type === 'model'
+              ? styles.modelRankTable
+              : styles.modelTable
+        }
+      >
         <thead>
           <tr>
             <th>{t('usage_analytics.col_rank')}</th>
@@ -3401,9 +3486,14 @@ function RankTable({
             <th>{t('usage_analytics.metric_input_tokens')}</th>
             <th>{t('usage_analytics.metric_output_tokens')}</th>
             <th>{t('usage_analytics.metric_cached_tokens')}</th>
+            {type === 'model' ? <th>{t('usage_analytics.cache_read_rate')}</th> : null}
             <th>{t('usage_analytics.metric_estimated_cost')}</th>
+            {type === 'model' ? (
+              <th>{t('usage_analytics.metric_average_cost_per_call')}</th>
+            ) : null}
+            {type === 'model' ? <th>{t('usage_analytics.metric_failure_count')}</th> : null}
             <th>{t('usage_analytics.success_rate')}</th>
-            <th>{t('usage_analytics.share')}</th>
+            <th>{t('usage_analytics.cost_share')}</th>
             {type === 'apiKey' ? <th>{t('usage_analytics.trend')}</th> : null}
           </tr>
         </thead>
@@ -3435,8 +3525,26 @@ function RankTable({
                 <td>{compactNumber(row.inputTokens)}</td>
                 <td>{compactNumber(row.outputTokens)}</td>
                 <td>{compactNumber(row.cachedTokens)}</td>
+                {type === 'model' ? <td>{formatPercent(computeRowCacheHitRate(row))}</td> : null}
                 <td>{formatMetricValue('estimatedCost', row.estimatedCost)}</td>
-                <td>{formatPercent(row.successRate)}</td>
+                {type === 'model' ? (
+                  <td>{formatMetricValue('estimatedCost', computeRowAverageCostPerCall(row))}</td>
+                ) : null}
+                {type === 'model' ? (
+                  <td className={row.failureCount > 0 ? styles.tonebad : ''}>
+                    {compactNumber(row.failureCount)}
+                  </td>
+                ) : null}
+                <td
+                  className={
+                    row.requestCount > 0 &&
+                    row.successRate < USAGE_SUCCESS_RATE_WATCH_THRESHOLD
+                      ? styles.tonebad
+                      : ''
+                  }
+                >
+                  {formatPercent(row.successRate)}
+                </td>
                 <td>{formatPercent(row.share)}</td>
                 {type === 'apiKey' ? (
                   <td>
@@ -3456,10 +3564,12 @@ function DetailPanel({
   row,
   type,
   action,
+  keyDistribution,
 }: {
   row: UsageRankRow;
   type: 'model' | 'apiKey' | 'credential';
   action?: ReactNode;
+  keyDistribution?: UsageModelKeyDistributionRow[];
 }) {
   const { t } = useTranslation();
   const title =
@@ -3474,39 +3584,105 @@ function DetailPanel({
         <h2>{title}</h2>
         {action}
       </div>
-      <div className={styles.detailMetrics}>
-        {[
-          ['requestCount', row.requestCount],
-          ['totalTokens', row.totalTokens],
-          ['inputTokens', row.inputTokens],
-          ['outputTokens', row.outputTokens],
-          ['estimatedCost', row.estimatedCost],
-        ].map(([key, value]) => (
-          <div key={String(key)}>
-            <span>{getMetricLabel(key as UsageMetricKey, t)}</span>
-            <strong>{formatMetricValue(key as UsageMetricKey, Number(value))}</strong>
+      {type === 'model' ? (
+        // Unit economics + health only: absolute volumes already live in the rank table row.
+        <div className={styles.detailMetrics}>
+          <div>
+            <span>{t('usage_analytics.average_tokens_per_request')}</span>
+            <strong>
+              {compactNumber(row.requestCount > 0 ? row.totalTokens / row.requestCount : 0)}
+            </strong>
           </div>
-        ))}
-        <div>
-          <span>{t('usage_analytics.average_tokens_per_request')}</span>
-          <strong>
-            {compactNumber(row.requestCount > 0 ? row.totalTokens / row.requestCount : 0)}
-          </strong>
+          <div>
+            <span>{t('usage_analytics.average_cost')}</span>
+            <strong>
+              {formatMetricValue('estimatedCost', computeRowAverageCostPerCall(row))}
+            </strong>
+          </div>
+          <div>
+            <span>{t('usage_analytics.cache_read_rate')}</span>
+            <strong>{formatPercent(computeRowCacheHitRate(row))}</strong>
+          </div>
+          <div>
+            <span>{t('usage_analytics.metric_failure_count')}</span>
+            <strong className={row.failureCount > 0 ? styles.tonebad : ''}>
+              {compactNumber(row.failureCount)}
+            </strong>
+          </div>
+          <div>
+            <span>{t('usage_analytics.success_rate')}</span>
+            <strong
+              className={
+                row.requestCount > 0 && row.successRate < USAGE_SUCCESS_RATE_WATCH_THRESHOLD
+                  ? styles.tonebad
+                  : ''
+              }
+            >
+              {formatPercent(row.successRate)}
+            </strong>
+          </div>
         </div>
-        <div>
-          <span>{t('usage_analytics.average_cost')}</span>
-          <strong>
-            {formatMetricValue(
-              'estimatedCost',
-              row.requestCount > 0 ? row.estimatedCost / row.requestCount : 0
-            )}
-          </strong>
+      ) : (
+        <div className={styles.detailMetrics}>
+          {[
+            ['requestCount', row.requestCount],
+            ['totalTokens', row.totalTokens],
+            ['inputTokens', row.inputTokens],
+            ['outputTokens', row.outputTokens],
+            ['estimatedCost', row.estimatedCost],
+          ].map(([key, value]) => (
+            <div key={String(key)}>
+              <span>{getMetricLabel(key as UsageMetricKey, t)}</span>
+              <strong>{formatMetricValue(key as UsageMetricKey, Number(value))}</strong>
+            </div>
+          ))}
+          <div>
+            <span>{t('usage_analytics.average_tokens_per_request')}</span>
+            <strong>
+              {compactNumber(row.requestCount > 0 ? row.totalTokens / row.requestCount : 0)}
+            </strong>
+          </div>
+          <div>
+            <span>{t('usage_analytics.average_cost')}</span>
+            <strong>
+              {formatMetricValue(
+                'estimatedCost',
+                row.requestCount > 0 ? row.estimatedCost / row.requestCount : 0
+              )}
+            </strong>
+          </div>
+          <div>
+            <span>{t('usage_analytics.success_rate')}</span>
+            <strong
+              className={
+                row.requestCount > 0 && row.successRate < USAGE_SUCCESS_RATE_WATCH_THRESHOLD
+                  ? styles.tonebad
+                  : ''
+              }
+            >
+              {formatPercent(row.successRate)}
+            </strong>
+          </div>
         </div>
-        <div>
-          <span>{t('usage_analytics.success_rate')}</span>
-          <strong>{formatPercent(row.successRate)}</strong>
+      )}
+      {type === 'model' && keyDistribution && keyDistribution.length > 0 ? (
+        <div className={styles.modelDistribution}>
+          <h3>{t('usage_analytics.model_caller_distribution')}</h3>
+          <div>
+            {keyDistribution.map((entry) => (
+              <span key={entry.id}>
+                <i
+                  style={{
+                    width: `${Math.max(8, Math.min(100, entry.share * 100))}%`,
+                  }}
+                />
+                <b>{entry.label}</b>
+                <em>{formatPercent(entry.share)}</em>
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       {(type === 'apiKey' || type === 'credential') && row.models && row.models.length > 0 ? (
         <div className={styles.modelDistribution}>
           <h3>{t('usage_analytics.related_model_distribution')}</h3>
