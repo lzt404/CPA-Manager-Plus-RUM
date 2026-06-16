@@ -34,7 +34,10 @@ func New(cfg config.Config) *Service {
 }
 
 // Status 返回三个自动化能力的当前有效值与配置键名。
+// accountActionsAutoDisable 的 Enabled 是实际生效值：只有 accountActions 开启时，
+// AccountActionCandidateWorker 才会启动，自动禁用才可能生效。
 func (s *Service) Status() Status {
+	accountActionsEnabled := s.cfg.AccountActionsEnabled
 	return Status{
 		Source: SourceStartup,
 		QuotaCooldown: Capability{
@@ -43,12 +46,12 @@ func (s *Service) Status() Status {
 			ConfigFileKey: "quotaCooldownEnabled",
 		},
 		AccountActions: Capability{
-			Enabled:       s.cfg.AccountActionsEnabled,
+			Enabled:       accountActionsEnabled,
 			EnvKey:        "USAGE_ACCOUNT_ACTIONS_ENABLED",
 			ConfigFileKey: "accountActionsEnabled",
 		},
 		AccountActionsAutoDisable: Capability{
-			Enabled:       s.cfg.AccountActionsAutoDisable,
+			Enabled:       accountActionsEnabled && s.cfg.AccountActionsAutoDisable,
 			EnvKey:        "USAGE_ACCOUNT_ACTIONS_AUTO_DISABLE",
 			ConfigFileKey: "accountActionsAutoDisable",
 			DependsOn:     "accountActions",

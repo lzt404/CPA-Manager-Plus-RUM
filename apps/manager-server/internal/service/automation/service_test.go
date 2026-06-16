@@ -43,6 +43,30 @@ func TestStatusExposesEffectiveFlagsAndKeys(t *testing.T) {
 	}
 }
 
+func TestStatusAutoDisableReportsEffectiveValue(t *testing.T) {
+	status := New(config.Config{
+		AccountActionsEnabled:     false,
+		AccountActionsAutoDisable: true,
+	}).Status()
+	if status.AccountActions.Enabled {
+		t.Fatalf("accountActions should be disabled, got %#v", status.AccountActions)
+	}
+	if status.AccountActionsAutoDisable.Enabled {
+		t.Fatalf("accountActionsAutoDisable should not be effective when accountActions is disabled, got %#v", status.AccountActionsAutoDisable)
+	}
+	if status.AccountActionsAutoDisable.DependsOn != "accountActions" {
+		t.Fatalf("accountActionsAutoDisable dependsOn = %q", status.AccountActionsAutoDisable.DependsOn)
+	}
+
+	status = New(config.Config{
+		AccountActionsEnabled:     true,
+		AccountActionsAutoDisable: true,
+	}).Status()
+	if !status.AccountActionsAutoDisable.Enabled {
+		t.Fatalf("accountActionsAutoDisable should be effective when accountActions is enabled, got %#v", status.AccountActionsAutoDisable)
+	}
+}
+
 func TestStatusDefaultsAllOff(t *testing.T) {
 	status := New(config.Config{}).Status()
 	if status.QuotaCooldown.Enabled || status.AccountActions.Enabled || status.AccountActionsAutoDisable.Enabled {
