@@ -2,6 +2,8 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
       - '*-alpha*'
@@ -73,6 +75,40 @@ jobs:
               checkout_ref="${target_sha}"
               echo "Release tag ${release_tag} will be created from ${target_sha}"
             fi
+          elif [ "${GITHUB_REF_TYPE}" = "branch" ]; then
+            target_sha="$(git rev-parse --verify "${GITHUB_SHA}^{commit}")"
+            checkout_ref="${target_sha}"
+
+            base_tag="$(
+              git tag --merged "${target_sha}" --sort=-v:refname |
+                grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+                head -n 1 ||
+                true
+            )"
+            if [ -z "${base_tag}" ]; then
+              echo "::error::Could not find an upstream vMAJOR.MINOR.PATCH tag reachable from ${target_sha}"
+              exit 1
+            fi
+
+            base_version="${base_tag#v}"
+            latest_rum_tag="$(
+              git tag --list "v${base_version}-rum.*" --sort=-v:refname |
+                head -n 1 ||
+                true
+            )"
+            if [ -n "${latest_rum_tag}" ]; then
+              latest_rum_number="${latest_rum_tag##*-rum.}"
+              if ! [[ "${latest_rum_number}" =~ ^[0-9]+$ ]]; then
+                echo "::error::Could not parse RUM release number from ${latest_rum_tag}"
+                exit 1
+              fi
+              next_rum_number=$((latest_rum_number + 1))
+            else
+              next_rum_number=1
+            fi
+
+            release_tag="v${base_version}-rum.${next_rum_number}"
+            echo "Auto-selected release tag ${release_tag} from upstream ${base_tag}"
           else
             release_tag="${GITHUB_REF_NAME}"
             target_sha="$(git rev-parse --verify "${GITHUB_SHA}^{commit}")"

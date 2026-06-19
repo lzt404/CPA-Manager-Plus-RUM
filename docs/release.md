@@ -31,8 +31,11 @@ docs/release-notes/v1.0.2-en.md
 
 ## CI Triggers
 
-`.github/workflows/release.yml` publishes releases in two ways:
+`.github/workflows/release.yml` publishes releases in three ways:
 
+- Push to `main`. CI automatically finds the latest reachable upstream stable
+  tag, then publishes the next RUM tag in the form
+  `v<upstream-version>-rum.<N>`, for example `v1.7.0-rum.1`.
 - Push a release tag, for example `v1.7.0-rum.1`.
 - Run **Build and Release** manually from GitHub Actions and provide the
   release `tag`. The optional `target` input can be a commit, branch, or tag;
