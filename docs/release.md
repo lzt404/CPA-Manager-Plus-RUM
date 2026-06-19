@@ -29,10 +29,23 @@ docs/release-notes/v1.0.2-zh.md
 docs/release-notes/v1.0.2-en.md
 ```
 
+## CI Triggers
+
+`.github/workflows/release.yml` publishes releases in two ways:
+
+- Push a release tag, for example `v1.7.0-rum.1`.
+- Run **Build and Release** manually from GitHub Actions and provide the
+  release `tag`. The optional `target` input can be a commit, branch, or tag;
+  when omitted, CI releases the workflow run ref.
+
+Manual runs build the selected target commit and pass `tag_name` plus
+`target_commitish` to the GitHub Release step, so the Release uses the requested
+version tag without needing a separate tag-push workflow run first.
+
 ## CI Lookup
 
-On tag pushes, the `Generate release notes` step checks the current tag in this
-priority order:
+The `Generate release notes` step checks the release tag in this priority
+order:
 
 ```text
 docs/release-notes/<tag>-zh.md
@@ -44,7 +57,7 @@ docs/release-notes/<tag>-en.md
 - If no file is found, CI falls back to `git log --pretty="- %h %s"` for the
   range from the previous tag to the current tag.
 
-The filename must match the pushed tag exactly. Otherwise, CI will use the git
+The filename must match the release tag exactly. Otherwise, CI will use the git
 log fallback.
 
 ## Writing Template
@@ -68,9 +81,11 @@ curated note body outside that directory.
 ## Highlights
 
 ### Features
+
 - <User-facing capability description> (`<scope>`)
 
 ### Fixes
+
 - <What was fixed and the affected scope>
 
 <Keep only non-empty groups as needed: Performance / Refactor / Docs / Chore / CI / Build. Drop merge commits and noise.>
@@ -92,13 +107,13 @@ curated note body outside that directory.
 
 ## Commit Type Groups
 
-| Type | Group |
-|------|-------|
-| feat | Features |
-| fix | Fixes |
-| perf | Performance |
-| refactor | Refactor |
-| docs | Docs |
-| chore | Chore |
-| ci | CI |
-| build | Build |
+| Type     | Group       |
+| -------- | ----------- |
+| feat     | Features    |
+| fix      | Fixes       |
+| perf     | Performance |
+| refactor | Refactor    |
+| docs     | Docs        |
+| chore    | Chore       |
+| ci       | CI          |
+| build    | Build       |
