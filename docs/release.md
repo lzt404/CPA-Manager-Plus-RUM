@@ -42,6 +42,12 @@ Manual runs build the selected target commit and pass `tag_name` plus
 `target_commitish` to the GitHub Release step, so the Release uses the requested
 version tag without needing a separate tag-push workflow run first.
 
+Manual runs reject an existing tag by default. GitHub ignores `target_commitish`
+when the tag already exists, and the Latest release date follows the release tag
+commit rather than the time you edited an existing release. Use a new tag for a
+new publication date. Set `allow_existing_tag` only when you intentionally want
+to rebuild assets for an old release.
+
 ## CI Lookup
 
 The `Generate release notes` step checks the release tag in this priority

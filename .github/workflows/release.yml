@@ -17,6 +17,11 @@ on:
         description: 'Commit, branch, or tag to release. Defaults to the workflow run ref.'
         required: false
         type: string
+      allow_existing_tag:
+        description: 'Allow rebuilding an existing tag. Latest release date may stay on the old tag commit.'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   prepare-release:
@@ -56,6 +61,10 @@ jobs:
 
             git fetch --tags --force
             if git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null; then
+              if [ "${INPUT_ALLOW_EXISTING_TAG}" != "true" ]; then
+                echo "::error::Release tag ${release_tag} already exists. Use a new tag so GitHub Latest points to the new release commit, or set allow_existing_tag=true to rebuild the old tag."
+                exit 1
+              fi
               echo "Using existing tag ${release_tag}"
               target_sha="$(git rev-list -n 1 "refs/tags/${release_tag}")"
               checkout_ref="refs/tags/${release_tag}"
@@ -98,6 +107,7 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_TARGET: ${{ inputs.target }}
+          INPUT_ALLOW_EXISTING_TAG: ${{ inputs.allow_existing_tag }}
 
   build-and-release:
     runs-on: ubuntu-latest
