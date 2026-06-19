@@ -47,6 +47,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Fetch upstream release tags
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags https://github.com/seakee/CPA-Manager-Plus.git '+refs/tags/v*:refs/tags/v*'
+
       - name: Resolve release tag
         id: release
         run: |

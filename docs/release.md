@@ -36,6 +36,8 @@ docs/release-notes/v1.0.2-en.md
 - Push to `main`. CI automatically finds the latest reachable upstream stable
   tag, then publishes the next RUM tag in the form
   `v<upstream-version>-rum.<N>`, for example `v1.7.0-rum.1`.
+  The workflow fetches upstream release tags from `seakee/CPA-Manager-Plus`
+  before calculating this version.
 - Push a release tag, for example `v1.7.0-rum.1`.
 - Run **Build and Release** manually from GitHub Actions and provide the
   release `tag`. The optional `target` input can be a commit, branch, or tag;
