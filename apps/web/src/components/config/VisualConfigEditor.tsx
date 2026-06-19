@@ -188,6 +188,8 @@ export function VisualConfigEditor({
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
   const disableImageGenerationLabelId = useId();
   const disableImageGenerationHintId = `${disableImageGenerationLabelId}-hint`;
+  const pluginStoreSourcesInputId = useId();
+  const pluginStoreSourcesHintId = `${pluginStoreSourcesInputId}-hint`;
   const keepaliveInputId = useId();
   const keepaliveHintId = `${keepaliveInputId}-hint`;
   const keepaliveErrorId = `${keepaliveInputId}-error`;
@@ -780,6 +782,13 @@ export function VisualConfigEditor({
                   onChange={(loggingToFile) => onChange({ loggingToFile })}
                 />
                 <ToggleRow
+                  title={t('config_management.visual.sections.system.plugins_enabled')}
+                  description={t('config_management.visual.sections.system.plugins_enabled_desc')}
+                  checked={values.pluginsEnabled}
+                  disabled={disabled}
+                  onChange={(pluginsEnabled) => onChange({ pluginsEnabled })}
+                />
+                <ToggleRow
                   title={t('config_management.visual.sections.system.antigravity_signature_cache')}
                   description={t(
                     'config_management.visual.sections.system.antigravity_signature_cache_desc'
@@ -801,6 +810,34 @@ export function VisualConfigEditor({
                     onChange({ antigravitySignatureBypassStrict })
                   }
                 />
+              </SectionGrid>
+
+              <SectionGrid>
+                <Input
+                  label={t('config_management.visual.sections.system.plugins_dir')}
+                  placeholder="plugins"
+                  value={values.pluginsDir}
+                  onChange={(e) => onChange({ pluginsDir: e.target.value })}
+                  disabled={disabled}
+                  hint={t('config_management.visual.sections.system.plugins_dir_desc')}
+                />
+                <FieldShell
+                  label={t('config_management.visual.sections.system.plugin_store_sources')}
+                  htmlFor={pluginStoreSourcesInputId}
+                  hint={t('config_management.visual.sections.system.plugin_store_sources_desc')}
+                  hintId={pluginStoreSourcesHintId}
+                >
+                  <textarea
+                    id={pluginStoreSourcesInputId}
+                    className="input"
+                    rows={4}
+                    value={values.pluginStoreSourcesText}
+                    onChange={(e) => onChange({ pluginStoreSourcesText: e.target.value })}
+                    disabled={disabled}
+                    aria-describedby={pluginStoreSourcesHintId}
+                    placeholder="https://example.com/plugins.json"
+                  />
+                </FieldShell>
               </SectionGrid>
 
               <SectionGrid>

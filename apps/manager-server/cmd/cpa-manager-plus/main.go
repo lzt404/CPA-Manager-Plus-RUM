@@ -76,9 +76,25 @@ func runServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	serverApp := httpapi.New(cfg, db, manager)
+	automationSettingsService := serverApp.AppContext().AccountProcessingPolicyService
+	runtimeSettings := automationSettingsService.RuntimeSettings(ctx)
+	rateLimitAutoDisableWorker := worker.NewRateLimitAutoDisableWorker(db, collector.RuntimeConfig{
+		CPAUpstreamURL: cfg.CPAUpstreamURL,
+		ManagementKey:  cfg.ManagementKey,
+	})
+	accountActionWorker := worker.NewAccountActionCandidateWorker(db, runtimeSettings.AccountActionsAutoDisable)
+	automationRuntime := worker.NewAutomationRuntime(
+		automationSettingsService,
+		manager,
+		rateLimitAutoDisableWorker,
+		accountActionWorker,
+	)
+	serverApp.AppContext().AutomationRuntimeService = automationRuntime
+	automationRuntime.Start(ctx)
+
 	collectorWorker.Start(ctx)
 
-	serverApp := httpapi.New(cfg, db, manager)
 	codexInspectionWorker := worker.NewCodexInspectionWorker(serverApp.AppContext().Store, serverApp.AppContext().CodexInspectionService)
 	codexInspectionWorker.Start(ctx)
 

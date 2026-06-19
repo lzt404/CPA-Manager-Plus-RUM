@@ -91,6 +91,9 @@ export type VisualConfigValues = {
   authDir: string;
   apiKeysText: string;
   apiKeyAccessRules: ApiKeyAccessRule[];
+  pluginsEnabled: boolean;
+  pluginsDir: string;
+  pluginStoreSourcesText: string;
   debug: boolean;
   commercialMode: boolean;
   usageStatisticsEnabled: boolean;
@@ -154,6 +157,9 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   authDir: '',
   apiKeysText: '',
   apiKeyAccessRules: [],
+  pluginsEnabled: false,
+  pluginsDir: '',
+  pluginStoreSourcesText: '',
   debug: false,
   commercialMode: false,
   usageStatisticsEnabled: false,

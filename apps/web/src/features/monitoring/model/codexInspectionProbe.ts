@@ -2,13 +2,16 @@ import type { AxiosRequestConfig } from 'axios';
 import { requestCodexUsageRaw } from '@/services/api/codexQuota';
 import type { AuthFileItem, CodexRateLimitInfo } from '@/types';
 import {
+  buildCodexQuotaWindowInfos,
   classifyCodexRateLimitWindows,
   deriveCodexRateLimitUsedPercent,
   getCodexQuotaWindowUsedPercent,
   isCodexRateLimitReached,
   isDisabledAuthFile,
+  normalizePlanType,
   resolveAuthProvider,
   resolveCodexChatgptAccountId,
+  resolveCodexPlanType,
 } from '@/utils/quota';
 import { normalizeAuthIndex } from '@/utils/usage';
 import {
@@ -22,6 +25,14 @@ import { readString } from './codexInspectionSettings';
 type LogHandler = (level: CodexInspectionLogLevel, message: string) => void;
 
 const QUOTA_BODY_PATTERNS = ['quota exhausted', 'limit reached', 'payment_required'];
+const MAX_INSPECTION_ERROR_DETAIL_LENGTH = 2048;
+
+const truncateInspectionDetail = (value: unknown) => {
+  const text = readString(value);
+  if (!text) return '';
+  if (text.length <= MAX_INSPECTION_ERROR_DETAIL_LENGTH) return text;
+  return `${text.slice(0, MAX_INSPECTION_ERROR_DETAIL_LENGTH - 3)}...`;
+};
 
 const readAuthFileName = (file: AuthFileItem) => {
   const name = readString(file.name);
@@ -75,6 +86,18 @@ type CodexInspectionDecision = Pick<
 
 type UnauthorizedReason = 'unknown' | 'expired' | 'invalidated';
 
+const isDeactivatedWorkspaceResponse = (statusCode: number, bodyText: string): boolean =>
+  statusCode === 402 && bodyText.toLowerCase().includes('deactivated_workspace');
+
+const resolveDeactivatedWorkspaceProbeAction = (
+  usedPercent: number | null
+): CodexInspectionDecision => ({
+  action: 'delete',
+  actionReason: '接口返回 402，工作区已停用，建议删除账号',
+  usedPercent,
+  isQuota: false,
+});
+
 const classifyUnauthorizedReason = (bodyText: string): UnauthorizedReason => {
   const normalized = bodyText.trim().toLowerCase();
   if (
@@ -108,15 +131,15 @@ const resolveUnauthorizedProbeAction = (
       };
     case 'invalidated':
       return {
-        action: 'delete',
-        actionReason: '接口返回 401，认证令牌已失效，建议删除账号',
+        action: 'reauth',
+        actionReason: '接口返回 401，认证令牌已失效，建议重新登录账号',
         usedPercent,
         isQuota: false,
       };
     default:
       return {
-        action: 'delete',
-        actionReason: '接口返回 401，建议删除失效账号',
+        action: 'reauth',
+        actionReason: '接口返回 401，认证失败，建议重新登录账号',
         usedPercent,
         isQuota: false,
       };
@@ -172,12 +195,15 @@ const resolveWindowAwareProbeAction = (
   statusCode: number,
   bodyText: string,
   rateLimit: CodexRateLimitInfo | null,
-  threshold: number
+  threshold: number,
+  planType?: string | null
 ): CodexInspectionDecision | null => {
   if (!rateLimit) return null;
 
   const { fiveHourWindow, weeklyWindow, monthlyWindow, longWindow } =
-    classifyCodexRateLimitWindows(rateLimit);
+    classifyCodexRateLimitWindows(rateLimit, {
+      teamPlan: normalizePlanType(planType) === 'team',
+    });
   const longWindowUsedPercent = getCodexQuotaWindowUsedPercent(longWindow);
   if (!longWindow || longWindowUsedPercent === null) return null;
 
@@ -243,14 +269,20 @@ const resolveProbeAction = (
   rateLimit: CodexRateLimitInfo | null,
   usedPercent: number | null,
   isQuota: boolean,
-  threshold: number
+  threshold: number,
+  planType?: string | null
 ): CodexInspectionDecision => {
+  if (isDeactivatedWorkspaceResponse(statusCode, bodyText)) {
+    return resolveDeactivatedWorkspaceProbeAction(usedPercent);
+  }
+
   const windowAwareDecision = resolveWindowAwareProbeAction(
     account,
     statusCode,
     bodyText,
     rateLimit,
-    threshold
+    threshold,
+    planType
   );
   if (windowAwareDecision) return windowAwareDecision;
   return resolveLegacyProbeAction(account, statusCode, bodyText, usedPercent, isQuota, threshold);
@@ -271,6 +303,10 @@ export const inspectSingleAccount = async (
       usedPercent: null,
       isQuota: false,
       error: '缺少 auth_index',
+      planType: resolveCodexPlanType(account.raw),
+      quotaWindows: [],
+      errorKind: 'missing_auth_index',
+      errorDetail: '缺少 auth_index',
     };
   }
 
@@ -288,8 +324,14 @@ export const inspectSingleAccount = async (
       })
     );
 
+    const planType =
+      normalizePlanType(payload?.plan_type ?? payload?.planType) ?? resolveCodexPlanType(account.raw);
+    const quotaWindows = payload ? buildCodexQuotaWindowInfos(payload, { planType }) : [];
+
     if (!result.hasStatusCode) {
       onLog?.('warning', `${account.displayAccount} 探测未返回 status_code，保留账号`);
+      const errorDetail =
+        truncateInspectionDetail(result.bodyText) || '探测响应缺少 status_code';
       return {
         ...account,
         action: 'keep',
@@ -298,6 +340,10 @@ export const inspectSingleAccount = async (
         usedPercent: null,
         isQuota: false,
         error: '响应缺少 status_code',
+        planType,
+        quotaWindows,
+        errorKind: 'missing_status',
+        errorDetail,
       };
     }
 
@@ -316,7 +362,8 @@ export const inspectSingleAccount = async (
       rateLimit,
       usedPercent,
       isQuota,
-      settings.usedPercentThreshold
+      settings.usedPercentThreshold,
+      planType
     );
 
     const successLevel =
@@ -342,9 +389,18 @@ export const inspectSingleAccount = async (
       usedPercent: decision.usedPercent,
       isQuota: decision.isQuota,
       error: '',
+      planType,
+      quotaWindows,
+      errorKind:
+        result.statusCode >= 200 && result.statusCode < 300 ? '' : 'http_status',
+      errorDetail:
+        result.statusCode >= 200 && result.statusCode < 300
+          ? ''
+          : truncateInspectionDetail(result.bodyText),
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error || '探测失败');
+    const errorDetail = truncateInspectionDetail(errorMessage) || '探测失败';
     onLog?.('warning', `${account.displayAccount} 探测异常，保留账号：${errorMessage}`);
     return {
       ...account,
@@ -354,6 +410,10 @@ export const inspectSingleAccount = async (
       usedPercent: null,
       isQuota: false,
       error: errorMessage,
+      planType: resolveCodexPlanType(account.raw),
+      quotaWindows: [],
+      errorKind: 'request_error',
+      errorDetail,
     };
   }
 };
